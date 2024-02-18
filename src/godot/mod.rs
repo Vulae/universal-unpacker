@@ -1,5 +1,5 @@
 
-use std::{error::Error, fs::{self, File}, io::{Read, Seek, Write}, os::windows::fs::FileExt, path::PathBuf};
+use std::{error::Error, fs::{self, File}, io::{Read, Seek, Write}, path::PathBuf};
 use bitstream_io::{ByteRead, ByteReader, LittleEndian};
 
 
