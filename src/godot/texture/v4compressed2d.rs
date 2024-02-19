@@ -83,8 +83,7 @@ impl V4Compressed2d {
                     mips.push(data);
                 }
             },
-            DataFormat::Image => todo!(),
-            DataFormat::BasisUniversal => todo!(),
+            _ => return Err(Box::new(TextureError::CannotRead)),
         }
 
         Ok(V4Compressed2d {
