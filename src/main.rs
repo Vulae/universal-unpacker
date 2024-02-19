@@ -60,7 +60,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     match args.command {
         Commands::Extract { output, mut method, extract_options } => {
             if extract_options == ExtractOptions::Clean {
-                fs::remove_dir_all(&output)?;
+                if let Ok(meta) = fs::metadata(&output) {
+                    if meta.is_dir() {
+                        fs::remove_dir_all(&output)?;
+                    }
+                }
             }
 
             method.extract(&output, extract_options == ExtractOptions::Overwrite)?;
