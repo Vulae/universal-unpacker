@@ -1,12 +1,11 @@
+#![allow(dead_code)]
 
 use std::{error::Error, fs::{self, File}, io::{Cursor, Write}, path::PathBuf};
 use clap::Parser;
-use crate::godot::archive::GodotPck;
-
-use self::ctex::{GodotCtex, GodotCtexDataFormats};
+use self::{texture::Texture, archive::GodotPck};
 
 mod archive;
-mod ctex;
+mod texture;
 
 
 
@@ -27,13 +26,9 @@ pub struct CliGodotPck {
 
 fn convert(path: &String, data: &Vec<u8>) -> Option<(String, Vec<u8>)> {
     if path.ends_with(".ctex") {
-        if let Ok(ctex) = GodotCtex::load(Cursor::new(data)) {
-            if ctex.data_format == GodotCtexDataFormats::Png || ctex.data_format == GodotCtexDataFormats::Webp {
-                let first_mip = &ctex.mips[0];
-                return Some((
-                    if ctex.data_format == GodotCtexDataFormats::Png { "png".to_owned() } else { "webp".to_owned() },
-                    first_mip.clone()
-                ));
+        if let Ok(mut texture) = Texture::load(Cursor::new(data)) {
+            if let Ok((new_ext, image)) = texture.to_image() {
+                return Some((new_ext.to_owned(), image));
             }
         }
     }
@@ -45,7 +40,6 @@ fn convert(path: &String, data: &Vec<u8>) -> Option<(String, Vec<u8>)> {
 
 impl CliGodotPck {
 
-    
     pub fn extract(&self, output: &PathBuf, overwrite_output: bool) -> Result<(), Box<dyn Error>> {
         let key: Option<[u8; 32]> = if let Some(key) = &self.key {
             todo!("Decode hex key");
