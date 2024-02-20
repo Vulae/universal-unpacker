@@ -2,10 +2,12 @@
 
 use std::{error::Error, fs::{self, File}, io::{Cursor, Write}, path::PathBuf};
 use clap::Parser;
-use self::{texture::Texture, archive::GodotPck};
+use crate::godot::resource::ResourceContainer;
+use self::{archive::GodotPck, texture::Texture};
 
 mod archive;
 mod texture;
+mod resource;
 
 
 
@@ -20,19 +22,34 @@ pub struct CliGodotPck {
     /// 
     /// [Extract encryption key](https://github.com/pozm/gdke/tree/master)
     key: Option<String>,
+    #[arg(short, long, default_value_t = false)]
+    /// If to convert compatible formats.
+    /// > WARNING: Experimental, file size may VERY large!
+    parse: bool,
 }
 
 
 
-fn convert(path: &String, data: &Vec<u8>) -> Option<(String, Vec<u8>)> {
-    if path.ends_with(".ctex") || path.ends_with(".stex") {
-        if let Ok(mut texture) = Texture::load(Cursor::new(data)) {
-            if let Ok((new_ext, image)) = texture.to_image() {
-                return Some((new_ext.to_owned(), image));
-            }
-        }
-    }
 
+
+fn resource_format_convert(_path: &String, data: &Vec<u8>) -> Option<(String, Vec<u8>)> {
+    if data.len() < 4 { return None }
+    match &data[0..4] {
+        b"RSRC" | b"RSCC" => {
+            if let Ok(extracted_resource) = ResourceContainer::load(Cursor::new(data)) {
+                let resource_string = format!("{:#?}", &extracted_resource);
+                return Some(("extracted_resource".to_owned(), resource_string.into_bytes()));
+            }
+        },
+        [b'G', b'D', _, _] | [b'G', b'S', _, _] => {
+            if let Ok(mut texture) = Texture::load(Cursor::new(data)) {
+                if let Ok((new_ext, image)) = texture.to_image() {
+                    return Some((new_ext.to_owned(), image));
+                }
+            }
+        },
+        _ => { },
+    }
     None
 }
 
@@ -41,7 +58,7 @@ fn convert(path: &String, data: &Vec<u8>) -> Option<(String, Vec<u8>)> {
 impl CliGodotPck {
 
     pub fn extract(&self, output: &PathBuf, overwrite_output: bool) -> Result<(), Box<dyn Error>> {
-        let key: Option<[u8; 32]> = if let Some(key) = &self.key {
+        let key: Option<[u8; 32]> = if let Some(_key) = &self.key {
             todo!("Decode hex key");
             // Some(decode_hex(key)?.try_into().unwrap())
         } else {
@@ -63,9 +80,11 @@ impl CliGodotPck {
             
             let mut data = file.read_data(key)?;
 
-            if let Some((new_ext, new_data)) = convert(&file.path, &data) {
-                output_file_path.set_extension(new_ext);
-                data = new_data;
+            if self.parse {
+                if let Some((new_ext, new_data)) = resource_format_convert(&file.path, &data) {
+                    output_file_path.set_extension(new_ext);
+                    data = new_data;
+                }
             }
 
             if let Ok(meta) = fs::metadata(&output_file_path) {

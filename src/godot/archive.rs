@@ -37,7 +37,7 @@ impl GodotPckFile {
         self.file.read(&mut buf)?;
 
         if self.flags.contains(GodotPckFileFlags::ENCRYPTED_FILE) {
-            if let Some(encryption_key) = encryption_key {
+            if let Some(_encryption_key) = encryption_key {
                 todo!("GodotPckFile decryption not yet supported.");
             } else {
                 panic!("GodotPckFile tried to decrypt file that is encrypted");
