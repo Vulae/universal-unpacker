@@ -71,7 +71,7 @@ pub enum Variant {
 }
 
 impl Variant {
-    pub fn read(data: impl Read, use_real64: bool) -> Result<Self, Box<dyn Error>> {
+    pub fn read(data: impl Read, bin_version: i32, use_real64: bool) -> Result<Self, Box<dyn Error>> {
         let mut reader = ByteReader::endian(data, LittleEndian);
         // TODO: Implement reading all variants.
         let value = match reader.read::<u32>()? {
@@ -90,12 +90,12 @@ impl Variant {
                 let mut len: u32 = reader.read()?;
                 len &= 0x7FFFFFFF; // Last bit set = shared.
                 for _ in 0..len {
-                    let key = Variant::read(reader.reader_ref(), use_real64)?;
+                    let key = Variant::read(reader.reader_ref(), bin_version, use_real64)?;
                     let key = match key {
                         Variant::String(str) => str,
                         _ => return Err(Box::new(ResourceError::VariantDictionaryKeyNotString)),
                     };
-                    let value = Variant::read(reader.reader_ref(), use_real64)?;
+                    let value = Variant::read(reader.reader_ref(), bin_version, use_real64)?;
                     dict.insert(key, value);
                 }
                 Variant::Dictionary(dict)
@@ -105,7 +105,7 @@ impl Variant {
                 len &= 0x7FFFFFFF; // Last bit set = shared.
                 let mut items: Vec<Variant> = Vec::new();
                 for _ in 0..len {
-                    items.push(Variant::read(reader.reader_ref(), use_real64)?);
+                    items.push(Variant::read(reader.reader_ref(), bin_version, use_real64)?);
                 }
                 Variant::Array(items)
             },
@@ -160,9 +160,7 @@ impl Variant {
                 }
                 Variant::PackedInt64Array(items)
             }
-            v => {
-                panic!("Unknown variant type. \"{}\"", v);
-            },
+            v => return Err(Box::new(ResourceError::UnknownVariant(v))),
         };
         Ok(value)
     }
@@ -211,19 +209,21 @@ impl ResourceFlags {
 
 #[derive(Debug, Clone)]
 enum ResourceError {
-    UnsupportedVersion, // TODO: Only version 5 is supported.
+    UnsupportedVersion(i32), // TODO: Only version 5 is supported.
     CompressionNotSupported, // TODO: Support compressed resources.
     BigEndianNotSupported, // TODO: Support big endian
     VariantDictionaryKeyNotString,
+    UnknownVariant(u32),
 }
 
 impl fmt::Display for ResourceError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::UnsupportedVersion => write!(f, "Resources of version 5 only supported."),
+            Self::UnsupportedVersion(version) => write!(f, "Resources of version {} not supported.", version),
             Self::CompressionNotSupported => write!(f, "Compressed resource not supported."),
             Self::BigEndianNotSupported => write!(f, "Big endian not supported."),
             Self::VariantDictionaryKeyNotString => write!(f, "Variant dictionary key must be string."),
+            Self::UnknownVariant(v) => write!(f, "Unknown variant {}.", v),
         }
     }
 }
@@ -235,6 +235,7 @@ impl Error for ResourceError { }
 #[derive(Debug)]
 pub struct ResourceContainer {
     pub version: (u32, u32),
+    pub bin_version: i32,
     pub resource_type: String,
     pub flags: ResourceFlags,
     pub uid: Option<u64>,
@@ -268,13 +269,13 @@ impl ResourceContainer {
         let use_real64: bool = reader.read::<u32>()? > 0;
     
         let version: (u32, u32) = (reader.read()?, reader.read()?);
-        let resource_format_version: i32 = reader.read()?;
-        if resource_format_version != 5 {
-            return Err(Box::new(ResourceError::UnsupportedVersion));
+        let bin_version: i32 = reader.read()?;
+        if bin_version != 3 && bin_version != 5 {
+            return Err(Box::new(ResourceError::UnsupportedVersion(bin_version)));
         }
     
         let resource_type = reader.read_string()?;
-    
+
         let _metadata_offset: u64 = reader.read()?;
         let flags = ResourceFlags::from_bits_retain(reader.read()?);
 
@@ -288,9 +289,13 @@ impl ResourceContainer {
         for _ in 0..reader.read::<u32>()? {
             string_table.push(reader.read_string()?);
         }
-    
+
         let mut external_resources: Vec<(String, String, Option<u64>)> = Vec::new();
-        for _ in 0..reader.read::<u32>()? {
+        let mut num_external_resources: u32 = reader.read()?;
+        if bin_version == 3 {
+            num_external_resources /= 2; // TODO: Why???
+        }
+        for _ in 0..num_external_resources {
             external_resources.push((
                 reader.read_string()?, // Type
                 reader.read_string()?, // Path
@@ -299,11 +304,15 @@ impl ResourceContainer {
             ));
         }
     
+        if bin_version == 3 {
+            reader.skip(4)?; // TODO: Why???
+        }
+
         let mut internal_resources: Vec<(String, u64)> = Vec::new();
         for _ in 0..reader.read::<u32>()? {
             internal_resources.push((
                 reader.read_string()?, // Path
-                reader.read::<u64>()?, // Offset
+                if bin_version == 3 { reader.read::<u32>()? as u64 } else { reader.read()? }, // Offset
             ));
         }
 
@@ -316,7 +325,7 @@ impl ResourceContainer {
                 let name_index: u32 = reader.read()?;
                 // println!("========== BEGIN VARIANT ==========");
                 // println!("{} at {:#x}", name_index, reader.reader().stream_position()?);
-                let variant = Variant::read(reader.reader(), use_real64)?;
+                let variant = Variant::read(reader.reader(), bin_version, use_real64)?;
                 properties.push((name_index, variant));
             }
             parsed_internal_resources.push((
@@ -328,6 +337,7 @@ impl ResourceContainer {
     
         Ok(ResourceContainer {
             version,
+            bin_version,
             resource_type,
             flags,
             uid,

@@ -36,10 +36,10 @@ fn resource_format_convert(_path: &String, data: &Vec<u8>) -> Option<(String, Ve
     if data.len() < 4 { return None }
     match &data[0..4] {
         b"RSRC" | b"RSCC" => {
-            if let Ok(extracted_resource) = ResourceContainer::load(Cursor::new(data)) {
-                let resource_string = format!("{:#?}", &extracted_resource);
-                return Some(("extracted_resource".to_owned(), resource_string.into_bytes()));
-            }
+            return match ResourceContainer::load(Cursor::new(data)) {
+                Ok(extracted_resource) => Some(("extracted_resource".to_owned(), format!("{:#?}", extracted_resource).into_bytes())),
+                Err(_) => None,
+            };
         },
         [b'G', b'D', _, _] | [b'G', b'S', _, _] => {
             if let Ok(mut texture) = Texture::load(Cursor::new(data)) {
