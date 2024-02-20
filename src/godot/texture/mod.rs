@@ -1,8 +1,9 @@
 
 use std::{error::Error, fmt, io::{Read, Seek}};
-use self::v4compressed2d::V4Compressed2d;
+use self::{v3stream2d::V3Stream2d, v4compressed2d::V4Compressed2d};
 
 mod v4compressed2d;
+mod v3stream2d;
 
 
 
@@ -33,7 +34,7 @@ pub enum Texture {
     V2AtlasTexture,
     V2LargeTexture,
     V2Cubemap,
-    V3Stream2d,
+    V3Stream2d(V3Stream2d),
     V3Stream3d,
     V3StreamArray,
     V4Compressed2d(V4Compressed2d),
@@ -48,6 +49,7 @@ impl Texture {
         data.seek(std::io::SeekFrom::Start(0))?;
 
         match &identifier {
+            &V3Stream2d::IDENTIFIER => Ok(Texture::V3Stream2d(V3Stream2d::load(data)?)),
             &V4Compressed2d::IDENTIFIER => Ok(Texture::V4Compressed2d(V4Compressed2d::load(data)?)),
             _ => Err(Box::new(TextureError::UnknownFormat)),
         }
@@ -55,6 +57,7 @@ impl Texture {
 
     pub fn to_image(&mut self) -> Result<(&str, Vec<u8>), Box<dyn Error>> {
         match self {
+            Texture::V3Stream2d(texture) => texture.to_image(),
             Texture::V4Compressed2d(texture) => texture.to_image(),
             _ => Err(Box::new(TextureError::UnknownFormat)),
         }

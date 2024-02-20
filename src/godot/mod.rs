@@ -25,7 +25,7 @@ pub struct CliGodotPck {
 
 
 fn convert(path: &String, data: &Vec<u8>) -> Option<(String, Vec<u8>)> {
-    if path.ends_with(".ctex") {
+    if path.ends_with(".ctex") || path.ends_with(".stex") {
         if let Ok(mut texture) = Texture::load(Cursor::new(data)) {
             if let Ok((new_ext, image)) = texture.to_image() {
                 return Some((new_ext.to_owned(), image));

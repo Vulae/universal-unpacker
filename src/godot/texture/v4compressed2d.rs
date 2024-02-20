@@ -7,10 +7,11 @@ use super::TextureError;
 
 
 bitflags! {
-    pub struct TextureFlag: u32 {
+    pub struct DataFlags: u32 {
         const BIT_STREAM = 1 << 22;
         const HAS_MIPMAPS = 1 << 23;
         const DETECT_3D = 1 << 24;
+        const DETECT_SRGB = 1 << 25;
         const DETECT_NORMAL = 1 << 26;
         const DETECT_ROUGHNESS = 1 << 27;
     }
@@ -43,7 +44,7 @@ impl DataFormat {
 pub struct V4Compressed2d {
     original_width: u32,
     original_height: u32,
-    flags: TextureFlag,
+    flags: DataFlags,
     original_num_mips: i32,
     data_format: DataFormat,
     width: u16,
@@ -63,7 +64,7 @@ impl V4Compressed2d {
         assert!(reader.read::<u32>()? == 1, "Texture version must be 1.");
         let original_width: u32 = reader.read()?;
         let original_height: u32 = reader.read()?;
-        let flags = TextureFlag::from_bits_retain(reader.read()?);
+        let flags = DataFlags::from_bits_retain(reader.read()?);
         let original_num_mips: i32 = reader.read()?;
         reader.skip(3 * 4)?; // Reserved space
 
@@ -99,9 +100,6 @@ impl V4Compressed2d {
             mips,
         })
     }
-
-    // pub fn width<R: std::convert::From<u16>>(self) -> R { self.width.into() }
-    // pub fn height<R: std::convert::From<u16>>(self) -> R { self.height.into() }
 
     pub fn to_image(&mut self) -> Result<(&str, Vec<u8>), Box<dyn Error>> {
         match self.data_format {
