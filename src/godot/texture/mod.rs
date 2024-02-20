@@ -37,6 +37,7 @@ pub enum Texture {
     V3Stream3d,
     V3StreamArray,
     V4Compressed2d(V4Compressed2d),
+    V4Compressed3d,
     V4CompressedLayered,
 }
 
