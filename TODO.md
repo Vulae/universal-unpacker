@@ -9,3 +9,6 @@
 * Unity assets
 * [Ren'Py](https://github.com/renpy/renpy/blob/master/launcher/game/archiver.rpy) archive (.rpa)
 * Ren'Py compiled script decompiler (.rpyc)
+* Unreal Engine 4 archive (.pak)
+* Nadeo Archive (.pak NadeoPak)
+

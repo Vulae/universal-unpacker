@@ -1,7 +1,9 @@
 [package]
 name = "universal-unpacker"
-description = "A simple command line tool to unpack a variety of files (Specifically game files)"
-version = "0.1.0"
+description = "A simple command line tool to extract assets from a variety of archival formats. (Mainly game archives)"
+repository = "https://github.com/Vulae/universal-unpacker"
+license = "MIT"
+version = "1.0.0-alpha"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
