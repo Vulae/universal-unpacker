@@ -9,6 +9,6 @@ A simple command line tool to extract assets from a variety of archival formats.
     * Automatically convert textures to compatible image formats
     * Extract resource data
 
-A list of to be implemented formats is in the [`TODO.md`](#future-unpackers)
+A list of to be implemented formats is in the [`TODO.md`](/TODO.md#future-unpackers)
 
 ## [`MIT License`](/LICENSE)
