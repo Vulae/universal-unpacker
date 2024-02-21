@@ -60,10 +60,12 @@ pub struct GodotPck {
 
 impl GodotPck {
 
+    const IDENTIFIER: [u8; 4] = *b"GDPC";
+
     pub fn from_file(file: File) -> Result<Self, Box<dyn Error>> {
         let mut reader = ByteReader::endian(&file, LittleEndian);
 
-        assert!(reader.read::<u32>()? == 0x43504447, "GodotPck magic check failed.");
+        assert!(Self::IDENTIFIER.iter().eq(reader.read::<[u8; 4]>()?.iter()), "Archive identifier does not match.");
 
         let version: (i32, i32, i32, i32) = (
             reader.read()?, reader.read()?, reader.read()?, reader.read()?,
