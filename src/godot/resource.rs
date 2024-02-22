@@ -1,7 +1,9 @@
 
-use std::{collections::HashMap, error::Error, fmt, io::{Read, Seek}};
-use bitstream_io::{ByteRead, ByteReader, Endianness, LittleEndian};
+use std::{collections::HashMap, error::Error, fmt, io::{self, Cursor, Read, Seek}};
+use bitstream_io::{ByteRead, ByteReader, Endianness, LittleEndian, Primitive};
 use bitflags::bitflags;
+
+use super::compression::reader::GodotCompressedReader;
 
 
 
@@ -191,6 +193,22 @@ impl<R: Read, E: Endianness> ByteReaderExtend for ByteReader<R, E> {
 
 
 
+trait ReadExt {
+    fn read_numeric<V: Primitive>(&mut self) -> io::Result<V>;
+}
+
+impl<T: Read> ReadExt for T {
+    fn read_numeric<V: Primitive>(&mut self) -> io::Result<V> {
+        let mut buffer = V::buffer();
+        self.read_exact(buffer.as_mut())?;
+        Ok(V::from_le_bytes(buffer))
+    }
+}
+
+
+
+
+
 bitflags! {
     #[derive(Debug)]
     pub struct ResourceFlags: u32 {
@@ -251,13 +269,26 @@ impl ResourceContainer {
     const IDENTIFIER_COMPRESSED: [u8; 4] = *b"RSCC";
     const IDENTIFIER_UNCOMPRESSED: [u8; 4] = *b"RSRC";
 
-    pub fn load(data: impl Read + Seek) -> Result<Self, Box<dyn Error>> {
-        let mut reader = ByteReader::endian(data, LittleEndian);
-    
-        let mut reader = match reader.read::<[u8; 4]>()? {
-            // TODO: Mutate stream to be compressed reader.
-            Self::IDENTIFIER_COMPRESSED => return Err(Box::new(ResourceError::CompressionNotSupported)),
-            Self::IDENTIFIER_UNCOMPRESSED => reader,
+    pub fn load<D: Read + Seek>(mut data: &mut D) -> Result<Self, Box<dyn Error>> {
+        let mut reader: ByteReader<Cursor<Vec<u8>>, LittleEndian> = match data.read_numeric::<[u8; 4]>()? {
+            Self::IDENTIFIER_COMPRESSED => {
+                // let data = GodotCompressedReader::open_after_ident(data)?;
+                // ByteReader::endian(data, LittleEndian)
+                // TODO: Get this to work.
+                let mut reader = GodotCompressedReader::open_after_ident(&mut data)?;
+                let mut c: Vec<u8> = Vec::new();
+                reader.read_to_end(&mut c)?;
+                ByteReader::endian(Cursor::new(c), LittleEndian)
+            },
+            Self::IDENTIFIER_UNCOMPRESSED => {
+                // reader
+                let mut c: Vec<u8> = Vec::new();
+                data.seek(io::SeekFrom::Start(0))?;
+                data.read_to_end(&mut c)?;
+                let mut reader = ByteReader::endian(Cursor::new(c), LittleEndian);
+                reader.skip(4)?;
+                reader
+            },
             _ => panic!("Resource identifier does not match."),
         };
     

@@ -8,6 +8,7 @@ use self::{archive::GodotPck, texture::Texture};
 mod archive;
 mod texture;
 mod resource;
+mod compression;
 
 
 
@@ -32,13 +33,16 @@ pub struct CliGodotPck {
 
 
 
-fn resource_format_convert(_path: &String, data: &Vec<u8>) -> Option<(String, Vec<u8>)> {
+fn resource_format_convert(path: &String, data: &Vec<u8>) -> Option<(String, Vec<u8>)> {
     if data.len() < 4 { return None }
     match &data[0..4] {
         b"RSRC" | b"RSCC" => {
-            return match ResourceContainer::load(Cursor::new(data)) {
+            return match ResourceContainer::load(&mut Cursor::new(data)) {
                 Ok(extracted_resource) => Some(("extracted_resource".to_owned(), format!("{:#?}", extracted_resource).into_bytes())),
-                Err(_) => None,
+                Err(err) => {
+                    println!("Resource parse failed \"{}\" {:#?}", path, err);
+                    None
+                },
             };
         },
         [b'G', b'D', _, _] | [b'G', b'S', _, _] => {
