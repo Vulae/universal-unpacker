@@ -45,7 +45,9 @@ pub struct GodotCompressedReader<'a, R: Read + Seek> {
 
 impl <'a, R: Read + Seek>GodotCompressedReader<'a, R> {
 
-    pub fn open_after_ident(data: &'a mut R) -> Result<Self, Box<dyn Error>> {
+    pub fn open_after_ident(data: &'a mut R, data_offset: u64) -> Result<Self, Box<dyn Error>> {
+        data.seek(SeekFrom::Start(data_offset))?;
+
         let compression = Compression::from(data.read_numeric()?)?;
         let block_size: u32 = data.read_numeric()?;
         let read_total: u32 = data.read_numeric()?;
@@ -59,6 +61,8 @@ impl <'a, R: Read + Seek>GodotCompressedReader<'a, R> {
             blocks.push(Block { offset: block_offset, size });
         }
 
+        println!("Blocks: {:#?}", &blocks);
+
         let mut compressed_reader = Self {
             data,
             compression,
@@ -70,7 +74,7 @@ impl <'a, R: Read + Seek>GodotCompressedReader<'a, R> {
             cur_block: Vec::new(),
         };
         compressed_reader.cur_block_pointer = 0;
-        compressed_reader.get_block(compressed_reader.cur_block_index)?;
+        compressed_reader.cur_block = compressed_reader.get_block(compressed_reader.cur_block_index)?;
 
         Ok(compressed_reader)
     }
@@ -80,7 +84,7 @@ impl <'a, R: Read + Seek>GodotCompressedReader<'a, R> {
     pub fn open(data: &'a mut R) -> Result<Self, Box<dyn Error>> {
         assert!(Self::IDENTIFIER.iter().eq(data.read_numeric::<[u8; 4]>()?.iter()), "Compressed identifier does not match.");
 
-        Self::open_after_ident(data)
+        Self::open_after_ident(data, 4)
     }
 
 
@@ -92,9 +96,12 @@ impl <'a, R: Read + Seek>GodotCompressedReader<'a, R> {
 
 
     fn get_block(&mut self, block: usize) -> Result<Vec<u8>, Box<dyn Error>> {
+        println!("Block {}", block);
+
         let block = &self.blocks[block];
 
         let mut block_data: Vec<u8> = Vec::with_capacity(block.size as usize);
+        block_data.resize(block.size as usize, 0);
         self.data.seek(std::io::SeekFrom::Start(block.offset))?;
         self.data.read(&mut block_data)?;
 
@@ -107,6 +114,7 @@ impl <'a, R: Read + Seek>GodotCompressedReader<'a, R> {
 
     fn internal_read_u8(&mut self) -> Result<u8, Box<dyn Error>> {
         let value = self.cur_block[self.cur_block_pointer];
+        self.cur_block_pointer += 1;
 
         if self.cur_block_pointer >= self.cur_block.len() {
             self.cur_block_index += 1;
@@ -163,13 +171,25 @@ impl <'a, R: Read + Seek>GodotCompressedReader<'a, R> {
 
 impl<'a, R: Read + Seek> Read for GodotCompressedReader<'a, R> {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, std::io::Error> {
-        self.internal_read(buf).map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "Error."))
+        match self.internal_read(buf) {
+            Ok(v) => Ok(v),
+            Err(e) => {
+                println!("Err {}", e);
+                Err(std::io::Error::new(std::io::ErrorKind::Other, "Error."))
+            }
+        }
     }
 }
 
 impl<'a, R: Read + Seek> Seek for GodotCompressedReader<'a, R> {
     fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
-        self.internal_seek(pos).map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "Error."))
+        match self.internal_seek(pos) {
+            Ok(v) => Ok(v),
+            Err(e) => {
+                println!("Err {}", e);
+                Err(std::io::Error::new(std::io::ErrorKind::Other, "Error."))
+            }
+        }
     }
 }
 

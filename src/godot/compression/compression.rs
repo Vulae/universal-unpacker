@@ -1,6 +1,6 @@
 
 use core::fmt;
-use std::{error::Error, io::Cursor};
+use std::{error::Error, io::{Cursor, Read}};
 
 
 
@@ -8,6 +8,7 @@ use std::{error::Error, io::Cursor};
 enum CompressionError {
     UnsupportedCompressionMethod(Compression),
     InvalidCompressionMethod(u32),
+    ZSTDDecompressionFailed(usize),
 }
 
 impl fmt::Display for CompressionError {
@@ -15,6 +16,7 @@ impl fmt::Display for CompressionError {
         match self {
             Self::UnsupportedCompressionMethod(method) => write!(f, "Unsupported compression method {:#?}", method),
             Self::InvalidCompressionMethod(method) => write!(f, "Invalid compression method {}", method),
+            Self::ZSTDDecompressionFailed(code) => write!(f, "ZSTD decompression failed. {}", code),
         }
     }
 }
@@ -32,8 +34,24 @@ pub struct CompressionZSTD {
 
 impl CompressionZSTD {
     pub fn decompress(&mut self, data: Vec<u8>) -> Result<Vec<u8>, Box<dyn Error>> {
-        let decompressed = zstd::stream::decode_all(Cursor::new(data))?;
-        Ok(decompressed)
+        // let mut ctx = zstd::zstd_safe::DCtx::create();
+        // let mut decompressed: Vec<u8> = Vec::new();
+        // decompressed.resize(4096, 0);
+        // println!("Data Len: {}", data.len());
+        // match ctx.decompress(&mut decompressed, &data) {
+        //     Ok(_) => Ok(decompressed),
+        //     Err(code) => Err(Box::new(CompressionError::ZSTDDecompressionFailed(code))),
+        // }
+
+        println!("Data Len: {}", data.len());
+        println!("{:#?}", &data[0..16]);
+        let mut decoder = ruzstd::StreamingDecoder::new(Cursor::new(data))?;
+        let mut result: Vec<u8> = Vec::new();
+        decoder.read_to_end(&mut result)?;
+
+        println!("{}", String::from_utf8_lossy(&result));
+
+        Ok(result)
     }
 }
 

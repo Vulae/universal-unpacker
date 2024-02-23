@@ -272,10 +272,11 @@ impl ResourceContainer {
     pub fn load<D: Read + Seek>(mut data: &mut D) -> Result<Self, Box<dyn Error>> {
         let mut reader: ByteReader<Cursor<Vec<u8>>, LittleEndian> = match data.read_numeric::<[u8; 4]>()? {
             Self::IDENTIFIER_COMPRESSED => {
+                println!("Compressed!");
                 // let data = GodotCompressedReader::open_after_ident(data)?;
                 // ByteReader::endian(data, LittleEndian)
                 // TODO: Get this to work.
-                let mut reader = GodotCompressedReader::open_after_ident(&mut data)?;
+                let mut reader = GodotCompressedReader::open_after_ident(&mut data, 4)?;
                 let mut c: Vec<u8> = Vec::new();
                 reader.read_to_end(&mut c)?;
                 ByteReader::endian(Cursor::new(c), LittleEndian)
