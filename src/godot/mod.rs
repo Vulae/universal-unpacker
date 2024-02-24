@@ -77,7 +77,7 @@ impl CliGodotPck {
         println!("Archive loaded with {} files", &archive.num_files);
 
         for file in &mut archive.files {
-            println!("Extracting file \"{}\" - {} bytes", &file.path, &file.size);
+            // println!("Extracting file \"{}\" - {} bytes", &file.path, &file.size);
 
             let mut output_file_path = PathBuf::from(output);
             output_file_path.push(&file.path.trim_start_matches("res://"));

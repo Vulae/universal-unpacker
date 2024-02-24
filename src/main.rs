@@ -1,10 +1,14 @@
+#![allow(dead_code)]
+#![allow(unused_variables)]
 
 mod godot;
-mod util;
+pub mod util;
+mod renpy;
 
 use std::{error::Error, fs, path::PathBuf};
 use clap::{Parser, Subcommand, ValueEnum};
 use godot::CliGodotPck;
+use renpy::CliRenPy;
 
 
 
@@ -41,12 +45,14 @@ enum Commands {
 #[derive(Subcommand, Debug)]
 enum ExtractionMethods {
     GodotPck(CliGodotPck),
+    RenPyArchive(CliRenPy),
 }
 
 impl ExtractionMethods {
     fn extract(&mut self, output: &PathBuf, overwrite_output: bool) -> Result<(), Box<dyn Error>> {
         match self {
             ExtractionMethods::GodotPck(method) => method.extract(output, overwrite_output)?,
+            ExtractionMethods::RenPyArchive(method) => method.extract(output, overwrite_output)?,
         }
         Ok(())
     }
