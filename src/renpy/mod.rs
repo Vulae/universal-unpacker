@@ -33,7 +33,7 @@ impl CliRenPy {
             println!("Extracting file \"{}\" - {} bytes", &file.path, &file.size);
 
             let mut output_file_path = PathBuf::from(output);
-            output_file_path.push(&file.path.trim_start_matches("res://"));
+            output_file_path.push(&file.path);
             
             let mut data = file.read_data()?;
 
