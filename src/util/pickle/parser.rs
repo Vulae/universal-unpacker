@@ -1,16 +1,16 @@
 
-// https://github.com/python/cpython/blob/main/Lib/pickle.py
-
 // TODO: Implement all opcodes.
 
-use std::{collections::HashMap, error::Error, fmt, io::Read};
+use std::{collections::HashMap, error::Error, io::Read};
 use crate::util::read_ext::ReadExt;
+
+use super::{error::PickleError, pickle::{Pickle, PickleNumber}};
 
 
 
 #[allow(non_camel_case_types)]
 #[derive(Debug, PartialEq, Eq)]
-enum PickleOpcode {
+pub enum PickleOpcode {
     MARK = 0x28, // push special markobject on stack
     STOP = 0x2E, // every pickle ends with STOP
     POP = 0x30, // discard topmost stack item
@@ -160,46 +160,6 @@ impl PickleOpcode {
         })
     }
 }
-
-
-
-
-
-
-#[derive(Debug)]
-enum PickleError {
-    UnknownProtocol,
-    UnsupportedProtocol,
-    StackEmpty,
-    StackMark,
-    MemoIndexOutOfBounds,
-    MemoEmpty,
-    PickleInvalidProtocolOperation,
-    UnsupportedOperation(PickleOpcode),
-    InvalidOperation(u8),
-    InvalidReferencePickleType,
-}
-
-impl fmt::Display for PickleError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::UnknownProtocol => write!(f, "Pickle protocol unknown."),
-            Self::UnsupportedProtocol => write!(f, "Pickle protocol unsupported."),
-            Self::StackEmpty => write!(f, "Pickle stack operation cannot complete due to stack being empty."),
-            Self::StackMark => write!(f, "Pickle stack operation cannot complete due to item being a marker."),
-            Self::MemoIndexOutOfBounds => write!(f, "Pickle memo list index out of bounds."),
-            Self::MemoEmpty => write!(f, "Pickle memo cannot get item due to memo list being empty."),
-            Self::PickleInvalidProtocolOperation => write!(f, "Pickle first operation MUST be PROTO."),
-            Self::UnsupportedOperation(opcode) => write!(f, "Pickle unsupported operation {:#?}.", opcode),
-            Self::InvalidOperation(opcode) => write!(f, "Pickle invalid operation {:x}", opcode),
-            Self::InvalidReferencePickleType => write!(f, "Pickle tried to reference pickle that is not correct type."),
-        }
-    }
-}
-
-impl Error for PickleError { }
-
-
 
 
 
@@ -445,154 +405,4 @@ impl PickleParser {
 
 }
 
-
-
-
-
-#[derive(Debug, Clone)]
-pub enum Pickle {
-    Dict(HashMap<String, Pickle>),
-    String(String),
-    List(Vec<Pickle>),
-    Number(PickleNumber),
-    Binary(Vec<u8>),
-    Tuple3((Box<Pickle>, Box<Pickle>, Box<Pickle>)),
-}
-
-impl Pickle {
-
-    fn list_push(&mut self, item: Pickle) -> Result<(), Box<dyn Error>> {
-        match self {
-            Pickle::List(list) => list.push(item),
-            _ => return Err(Box::new(PickleError::InvalidReferencePickleType)),
-        }
-        Ok(())
-    }
-
-    fn dict_set(&mut self, key: Pickle, item: Pickle) -> Result<(), Box<dyn Error>> {
-        match self {
-            Pickle::Dict(dict) => {
-                let key = match key {
-                    Pickle::String(str) => str,
-                    _ => return Err(Box::new(PickleError::InvalidReferencePickleType)),
-                };
-
-                dict.insert(key, item);
-            }
-            _ => return Err(Box::new(PickleError::InvalidReferencePickleType)),
-        }
-        Ok(())
-    }
-
-}
-
-
-
-#[derive(Debug, Clone)]
-pub enum PickleNumber {
-    Int(i64),
-    Uint(u64),
-    Float(f64),
-}
-
-// TODO: This probably can be turned into a macro.
-impl Into<u8> for PickleNumber {
-    fn into(self) -> u8 {
-        match self {
-            PickleNumber::Int(v) => v as u8,
-            PickleNumber::Uint(v) => v as u8,
-            PickleNumber::Float(v) => v as u8,
-        }
-    }
-}
-
-impl Into<u16> for PickleNumber {
-    fn into(self) -> u16 {
-        match self {
-            PickleNumber::Int(v) => v as u16,
-            PickleNumber::Uint(v) => v as u16,
-            PickleNumber::Float(v) => v as u16,
-        }
-    }
-}
-
-impl Into<u32> for PickleNumber {
-    fn into(self) -> u32 {
-        match self {
-            PickleNumber::Int(v) => v as u32,
-            PickleNumber::Uint(v) => v as u32,
-            PickleNumber::Float(v) => v as u32,
-        }
-    }
-}
-
-impl Into<u64> for PickleNumber {
-    fn into(self) -> u64 {
-        match self {
-            PickleNumber::Int(v) => v as u64,
-            PickleNumber::Uint(v) => v as u64,
-            PickleNumber::Float(v) => v as u64,
-        }
-    }
-}
-
-impl Into<i8> for PickleNumber {
-    fn into(self) -> i8 {
-        match self {
-            PickleNumber::Int(v) => v as i8,
-            PickleNumber::Uint(v) => v as i8,
-            PickleNumber::Float(v) => v as i8,
-        }
-    }
-}
-
-impl Into<i16> for PickleNumber {
-    fn into(self) -> i16 {
-        match self {
-            PickleNumber::Int(v) => v as i16,
-            PickleNumber::Uint(v) => v as i16,
-            PickleNumber::Float(v) => v as i16,
-        }
-    }
-}
-
-impl Into<i32> for PickleNumber {
-    fn into(self) -> i32 {
-        match self {
-            PickleNumber::Int(v) => v as i32,
-            PickleNumber::Uint(v) => v as i32,
-            PickleNumber::Float(v) => v as i32,
-        }
-    }
-}
-
-impl Into<i64> for PickleNumber {
-    fn into(self) -> i64 {
-        match self {
-            PickleNumber::Int(v) => v as i64,
-            PickleNumber::Uint(v) => v as i64,
-            PickleNumber::Float(v) => v as i64,
-        }
-    }
-}
-
-impl Into<f32> for PickleNumber {
-    fn into(self) -> f32 {
-        match self {
-            PickleNumber::Int(v) => v as f32,
-            PickleNumber::Uint(v) => v as f32,
-            PickleNumber::Float(v) => v as f32,
-        }
-    }
-}
-
-impl Into<f64> for PickleNumber {
-    fn into(self) -> f64 {
-        match self {
-            PickleNumber::Int(v) => v as f64,
-            PickleNumber::Uint(v) => v as f64,
-            PickleNumber::Float(v) => v as f64,
-        }
-    }
-}
 

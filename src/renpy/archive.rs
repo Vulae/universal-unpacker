@@ -1,6 +1,6 @@
 
 use std::{error::Error, fmt, fs::File, io::{Cursor, Read, Seek, Write}};
-use crate::util::{decode_hex, pickle::{Pickle, PickleParser}, read_ext::ReadExt};
+use crate::util::{decode_hex, pickle::{parser::PickleParser, pickle::Pickle}, read_ext::ReadExt};
 
 
 
@@ -121,14 +121,8 @@ impl RenPyArchive {
                             for chunk in list {
                                 match chunk {
                                     Pickle::Tuple3((offset, length, _)) => {
-                                        let offset: u64 = match *offset {
-                                            Pickle::Number(num) => num.into(),
-                                            _ => return Err(Box::new(RenPyError::PickleParseFail)),
-                                        };
-                                        let length: u64 = match *length {
-                                            Pickle::Number(num) => num.into(),
-                                            _ => return Err(Box::new(RenPyError::PickleParseFail)),
-                                        };
+                                        let offset: u64 = (*offset).try_into()?;
+                                        let length: u64 = (*length).try_into()?;
                                         file_chunks.push((offset ^ xor, length ^ xor));
                                     },
                                     _ => return Err(Box::new(RenPyError::PickleParseFail)),
