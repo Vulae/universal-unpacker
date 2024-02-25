@@ -49,8 +49,8 @@ impl Texture {
         data.seek(std::io::SeekFrom::Start(0))?;
 
         match &identifier {
-            &V3Stream2d::IDENTIFIER => Ok(Texture::V3Stream2d(V3Stream2d::load(data)?)),
-            &V4Compressed2d::IDENTIFIER => Ok(Texture::V4Compressed2d(V4Compressed2d::load(data)?)),
+            &V3Stream2d::IDENTIFIER => Ok(Texture::V3Stream2d(V3Stream2d::load(&mut data)?)),
+            &V4Compressed2d::IDENTIFIER => Ok(Texture::V4Compressed2d(V4Compressed2d::load(&mut data)?)),
             _ => Err(Box::new(TextureError::UnknownFormat)),
         }
     }

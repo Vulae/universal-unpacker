@@ -1,25 +1,7 @@
 
-use std::{error::Error, io::{self, Read, Seek, SeekFrom}};
-use bitstream_io::Primitive;
+use std::{error::Error, io::{Read, Seek, SeekFrom}};
 use super::compression::Compression;
-
-
-
-
-
-trait ReadExt {
-    fn read_numeric<V: Primitive>(&mut self) -> io::Result<V>;
-}
-
-impl<T: Read> ReadExt for T {
-    fn read_numeric<V: Primitive>(&mut self) -> io::Result<V> {
-        let mut buffer = V::buffer();
-        self.read_exact(buffer.as_mut())?;
-        Ok(V::from_le_bytes(buffer))
-    }
-}
-
-
+use crate::util::read_ext::ReadExt;
 
 
 
@@ -48,20 +30,18 @@ impl <'a, R: Read + Seek>GodotCompressedReader<'a, R> {
     pub fn open_after_ident(data: &'a mut R, data_offset: u64) -> Result<Self, Box<dyn Error>> {
         data.seek(SeekFrom::Start(data_offset))?;
 
-        let compression = Compression::from(data.read_numeric()?)?;
-        let block_size: u32 = data.read_numeric()?;
-        let read_total: u32 = data.read_numeric()?;
+        let compression = Compression::from(data.read_primitive()?)?;
+        let block_size: u32 = data.read_primitive()?;
+        let read_total: u32 = data.read_primitive()?;
         let num_blocks: u32 = (read_total / block_size) + 1;
         let mut blocks: Vec<Block> = Vec::new();
         
         let mut block_offset: u64 = data.stream_position()? + (num_blocks as u64) * 4;
         for _ in 0..num_blocks {
-            let size: u32 = data.read_numeric()?;
+            let size: u32 = data.read_primitive()?;
             block_offset += size as u64;
             blocks.push(Block { offset: block_offset, size });
         }
-
-        println!("Blocks: {:#?}", &blocks);
 
         let mut compressed_reader = Self {
             data,
@@ -82,7 +62,7 @@ impl <'a, R: Read + Seek>GodotCompressedReader<'a, R> {
     const IDENTIFIER: [u8; 4] = *b"GCMP";
 
     pub fn open(data: &'a mut R) -> Result<Self, Box<dyn Error>> {
-        assert!(Self::IDENTIFIER.iter().eq(data.read_numeric::<[u8; 4]>()?.iter()), "Compressed identifier does not match.");
+        assert!(Self::IDENTIFIER.iter().eq(data.read_primitive::<[u8; 4]>()?.iter()), "Compressed identifier does not match.");
 
         Self::open_after_ident(data, 4)
     }
@@ -96,8 +76,6 @@ impl <'a, R: Read + Seek>GodotCompressedReader<'a, R> {
 
 
     fn get_block(&mut self, block: usize) -> Result<Vec<u8>, Box<dyn Error>> {
-        println!("Block {}", block);
-
         let block = &self.blocks[block];
 
         let mut block_data: Vec<u8> = Vec::with_capacity(block.size as usize);

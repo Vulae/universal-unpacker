@@ -1,9 +1,27 @@
 
 use std::{collections::HashMap, error::Error, fmt, io::{self, Cursor, Read, Seek}};
-use bitstream_io::{ByteRead, ByteReader, Endianness, LittleEndian, Primitive};
 use bitflags::bitflags;
-
+use crate::util::read_ext::ReadExt;
 use super::compression::reader::GodotCompressedReader;
+
+
+
+
+
+pub trait ReadExtResource: Read {
+    fn read_real(&mut self, use_real64: bool) -> Result<f64, Box<dyn Error>>;
+}
+
+impl<T: Read> ReadExtResource for T {
+    fn read_real(&mut self, use_real64: bool) -> Result<f64, Box<dyn Error>> {
+        Ok(match use_real64 {
+            false => self.read_primitive::<f32>()? as f64,
+            true => self.read_primitive::<f64>()?,
+        })
+    }
+}
+
+
 
 
 
@@ -16,13 +34,12 @@ pub enum VariantObject {
 }
 
 impl VariantObject {
-    pub fn read(data: impl Read) -> Result<Self, Box<dyn Error>> {
-        let mut reader = ByteReader::endian(data, LittleEndian);
-        Ok(match reader.read::<u32>()? {
+    pub fn read(data: &mut impl Read) -> Result<Self, Box<dyn Error>> {
+        Ok(match data.read_primitive::<u32>()? {
             0 => VariantObject::Empty,
-            1 => VariantObject::ExternalResource((reader.read_string()?, reader.read_string()?)),
-            2 => VariantObject::InternalResource(reader.read()?),
-            3 => VariantObject::ExternalResourceIndex(reader.read()?),
+            1 => VariantObject::ExternalResource((data.read_string::<u32>()?, data.read_string::<u32>()?)),
+            2 => VariantObject::InternalResource(data.read_primitive()?),
+            3 => VariantObject::ExternalResourceIndex(data.read_primitive()?),
             v => panic!("Unknown variant object type. \"{}\"", v),
         })
     }
@@ -73,92 +90,93 @@ pub enum Variant {
 }
 
 impl Variant {
-    pub fn read(data: impl Read, bin_version: i32, use_real64: bool) -> Result<Self, Box<dyn Error>> {
-        let mut reader = ByteReader::endian(data, LittleEndian);
+    pub fn read(data: &mut (impl Read + Seek), bin_version: i32, use_real64: bool) -> Result<Self, Box<dyn Error>> {
         // TODO: Implement reading all variants.
-        let value = match reader.read::<u32>()? {
+        let value = match data.read_primitive::<u32>()? {
             1 => Variant::Nil,
-            2 => Variant::Bool(reader.read::<u32>()? > 0),
-            3 => Variant::Int(reader.read()?),
-            4 => Variant::Float(reader.read()?),
-            5 => Variant::String(reader.read_string()?),
-            10 => Variant::Vector2((reader.read_real(use_real64)?, reader.read_real(use_real64)?)),
-            12 => Variant::Vector3((reader.read_real(use_real64)?, reader.read_real(use_real64)?, reader.read_real(use_real64)?)),
-            13 => Variant::Plane(((reader.read_real(use_real64)?, reader.read_real(use_real64)?, reader.read_real(use_real64)?), reader.read_real(use_real64)?)),
-            20 => Variant::Color((reader.read()?, reader.read()?, reader.read()?, reader.read()?)),
-            24 => Variant::Object(VariantObject::read(reader.reader())?),
+            2 => Variant::Bool(data.read_primitive::<u32>()? > 0),
+            3 => Variant::Int(data.read_primitive()?),
+            4 => Variant::Float(data.read_primitive()?),
+            5 => Variant::String(data.read_string::<u32>()?),
+            10 => Variant::Vector2((data.read_real(use_real64)?, data.read_real(use_real64)?)),
+            12 => Variant::Vector3((data.read_real(use_real64)?, data.read_real(use_real64)?, data.read_real(use_real64)?)),
+            13 => Variant::Plane(((data.read_real(use_real64)?, data.read_real(use_real64)?, data.read_real(use_real64)?), data.read_real(use_real64)?)),
+            20 => Variant::Color((data.read_primitive()?, data.read_primitive()?, data.read_primitive()?, data.read_primitive()?)),
+            24 => Variant::Object(VariantObject::read(data)?),
             26 => {
                 let mut dict: HashMap<String, Variant> = HashMap::new();
-                let mut len: u32 = reader.read()?;
+                let mut len: u32 = data.read_primitive()?;
                 len &= 0x7FFFFFFF; // Last bit set = shared.
                 for _ in 0..len {
-                    let key = Variant::read(reader.reader_ref(), bin_version, use_real64)?;
+                    let key = Variant::read(data, bin_version, use_real64)?;
                     let key = match key {
                         Variant::String(str) => str,
                         _ => return Err(Box::new(ResourceError::VariantDictionaryKeyNotString)),
                     };
-                    let value = Variant::read(reader.reader_ref(), bin_version, use_real64)?;
+                    let value = Variant::read(data, bin_version, use_real64)?;
                     dict.insert(key, value);
                 }
                 Variant::Dictionary(dict)
             },
             30 => {
-                let mut len: u32 = reader.read()?;
+                let mut len: u32 = data.read_primitive()?;
                 len &= 0x7FFFFFFF; // Last bit set = shared.
                 let mut items: Vec<Variant> = Vec::new();
                 for _ in 0..len {
-                    items.push(Variant::read(reader.reader_ref(), bin_version, use_real64)?);
+                    items.push(Variant::read(data, bin_version, use_real64)?);
                 }
                 Variant::Array(items)
             },
             31 => {
-                let len: u32 = reader.read()?;
-                let items = reader.read_to_vec(len as usize)?;
+                let len: u32 = data.read_primitive()?;
+                let items = data.read_to_vec(len as usize)?;
                 // Padding
                 let extra = 4 - (len % 4);
-                if extra < 4 { reader.skip(extra)?; }
+                if extra < 4 {
+                    data.seek(io::SeekFrom::Current(extra.into()))?;
+                }
 
                 Variant::PackedByteArray(items)
             },
             32 => {
-                let len: u32 = reader.read()?;
+                let len: u32 = data.read_primitive()?;
                 let mut items: Vec<i32> = Vec::new();
                 for _ in 0..len {
-                    items.push(reader.read()?);
+                    items.push(data.read_primitive()?);
                 }
                 Variant::PackedInt32Array(items)
             },
             33 => {
-                let len: u32 = reader.read()?;
+                let len: u32 = data.read_primitive()?;
                 let mut items: Vec<f32> = Vec::new();
                 for _ in 0..len {
-                    items.push(reader.read()?);
+                    items.push(data.read_primitive()?);
                 }
                 Variant::PackedFloat32Array(items)
             },
             34 => {
-                let len: u32 = reader.read()?;
+                let len: u32 = data.read_primitive()?;
                 let mut items: Vec<String> = Vec::new();
                 for _ in 0..len {
-                    items.push(reader.read_string()?);
+                    items.push(data.read_string::<u32>()?);
                 }
                 Variant::PackedStringArray(items)
             },
             36 => {
-                let len: u32 = reader.read()?;
+                let len: u32 = data.read_primitive()?;
                 let mut items: Vec<(f32, f32, f32, f32)> = Vec::new();
                 for _ in 0..len {
-                    items.push((reader.read()?, reader.read()?, reader.read()?, reader.read()?));
+                    items.push((data.read_primitive()?, data.read_primitive()?, data.read_primitive()?, data.read_primitive()?));
                 }
                 Variant::PackedColorArray(items)
             },
-            41 => Variant::Double(reader.read()?),
-            44 => Variant::StringName(reader.read_string()?),
+            41 => Variant::Double(data.read_primitive()?),
+            44 => Variant::StringName(data.read_string::<u32>()?),
             48 => {
-                let len: u32 = reader.read()?;
+                let len: u32 = data.read_primitive()?;
                 let mut items: Vec<i64> = Vec::new();
                 for _ in 0..len {
-                    items.push(reader.read()?);
+                    items.push(data.read_primitive()?);
                 }
                 Variant::PackedInt64Array(items)
             }
@@ -167,45 +185,6 @@ impl Variant {
         Ok(value)
     }
 }
-
-
-
-trait ByteReaderExtend {
-    fn read_string(&mut self) -> Result<String, Box<dyn Error>>;
-    fn read_real(&mut self, use_real64: bool) -> Result<f64, Box<dyn Error>>;
-}
-
-impl<R: Read, E: Endianness> ByteReaderExtend for ByteReader<R, E> {
-    fn read_string(&mut self) -> Result<String, Box<dyn Error>> {
-        let len: u32 = self.read()?;
-        let str = String::from_utf8(self.read_to_vec(len as usize)?)?.trim_end_matches("\0").to_owned();
-        // let str = String::from_utf8(self.read_to_vec(len as usize)?)?;
-        Ok(str)
-    }
-
-    fn read_real(&mut self, use_real64: bool) -> Result<f64, Box<dyn Error>> {
-        match use_real64 {
-            false => Ok(self.read::<f32>()? as f64),
-            true => Ok(self.read()?)
-        }
-    }
-}
-
-
-
-trait ReadExt {
-    fn read_numeric<V: Primitive>(&mut self) -> io::Result<V>;
-}
-
-impl<T: Read> ReadExt for T {
-    fn read_numeric<V: Primitive>(&mut self) -> io::Result<V> {
-        let mut buffer = V::buffer();
-        self.read_exact(buffer.as_mut())?;
-        Ok(V::from_le_bytes(buffer))
-    }
-}
-
-
 
 
 
@@ -270,94 +249,93 @@ impl ResourceContainer {
     const IDENTIFIER_UNCOMPRESSED: [u8; 4] = *b"RSRC";
 
     pub fn load<D: Read + Seek>(mut data: &mut D) -> Result<Self, Box<dyn Error>> {
-        let mut reader: ByteReader<Cursor<Vec<u8>>, LittleEndian> = match data.read_numeric::<[u8; 4]>()? {
+        let mut data = match data.read_primitive::<[u8; 4]>()? {
             Self::IDENTIFIER_COMPRESSED => {
-                println!("Compressed!");
-                // let data = GodotCompressedReader::open_after_ident(data)?;
-                // ByteReader::endian(data, LittleEndian)
+                println!("WARNING: Compressed file will probably not parse correctly.");
+                // GodotCompressedReader::open_after_ident(data)?
                 // TODO: Get this to work.
                 let mut reader = GodotCompressedReader::open_after_ident(&mut data, 4)?;
                 let mut c: Vec<u8> = Vec::new();
                 reader.read_to_end(&mut c)?;
-                ByteReader::endian(Cursor::new(c), LittleEndian)
+                Cursor::new(c)
             },
             Self::IDENTIFIER_UNCOMPRESSED => {
                 // reader
                 let mut c: Vec<u8> = Vec::new();
                 data.seek(io::SeekFrom::Start(0))?;
                 data.read_to_end(&mut c)?;
-                let mut reader = ByteReader::endian(Cursor::new(c), LittleEndian);
-                reader.skip(4)?;
-                reader
+                let mut data = Cursor::new(c);
+                data.seek(std::io::SeekFrom::Current(4))?;
+                data
             },
             _ => panic!("Resource identifier does not match."),
         };
     
-        let big_endian: bool = reader.read::<u32>()? > 0;
+        let big_endian: bool = data.read_primitive::<u32>()? > 0;
         if big_endian {
             return Err(Box::new(ResourceError::BigEndianNotSupported));
         }
     
-        let use_real64: bool = reader.read::<u32>()? > 0;
+        let use_real64: bool = data.read_primitive::<u32>()? > 0;
     
-        let version: (u32, u32) = (reader.read()?, reader.read()?);
-        let bin_version: i32 = reader.read()?;
+        let version: (u32, u32) = (data.read_primitive()?, data.read_primitive()?);
+        let bin_version: i32 = data.read_primitive()?;
         if bin_version != 3 && bin_version != 5 {
             return Err(Box::new(ResourceError::UnsupportedVersion(bin_version)));
         }
     
-        let resource_type = reader.read_string()?;
+        let resource_type = data.read_string::<u32>()?;
 
-        let _metadata_offset: u64 = reader.read()?;
-        let flags = ResourceFlags::from_bits_retain(reader.read()?);
+        let _metadata_offset: u64 = data.read_primitive()?;
+        let flags = ResourceFlags::from_bits_retain(data.read_primitive()?);
 
-        let uid: Option<u64> = if flags.intersects(ResourceFlags::UIDS) { Some(reader.read()?) } else { reader.skip(4)?; None };
-        let script_class = if flags.intersects(ResourceFlags::HAS_SCRIPT_CLASS) { Some(reader.read_string()?) } else { None };
+        let uid: Option<u64> = if flags.intersects(ResourceFlags::UIDS) { Some(data.read_primitive()?) } else { data.seek(io::SeekFrom::Current(4))?; None };
+        let script_class = if flags.intersects(ResourceFlags::HAS_SCRIPT_CLASS) { Some(data.read_string::<u32>()?) } else { None };
         for _ in 0..ResourceFlags::RESERVED_FIELDS {
-            reader.skip(4)?;
+            data.seek(io::SeekFrom::Current(4))?;
         }
     
         let mut string_table: Vec<String> = Vec::new();
-        for _ in 0..reader.read::<u32>()? {
-            string_table.push(reader.read_string()?);
+        for _ in 0..data.read_primitive::<u32>()? {
+            string_table.push(data.read_string::<u32>()?);
         }
 
         let mut external_resources: Vec<(String, String, Option<u64>)> = Vec::new();
-        let mut num_external_resources: u32 = reader.read()?;
+        let mut num_external_resources: u32 = data.read_primitive()?;
         if bin_version == 3 {
             num_external_resources /= 2; // TODO: Why???
         }
         for _ in 0..num_external_resources {
             external_resources.push((
-                reader.read_string()?, // Type
-                reader.read_string()?, // Path
+                data.read_string::<u32>()?, // Type
+                data.read_string::<u32>()?, // Path
                 // Uid
-                if flags.intersects(ResourceFlags::UIDS) { Some(reader.read()?) } else { None },
+                if flags.intersects(ResourceFlags::UIDS) { Some(data.read_primitive()?) } else { None },
             ));
         }
     
         if bin_version == 3 {
-            reader.skip(4)?; // TODO: Why???
+            data.seek(io::SeekFrom::Current(4))?; // TODO: Why???
         }
 
         let mut internal_resources: Vec<(String, u64)> = Vec::new();
-        for _ in 0..reader.read::<u32>()? {
+        for _ in 0..data.read_primitive::<u32>()? {
             internal_resources.push((
-                reader.read_string()?, // Path
-                if bin_version == 3 { reader.read::<u32>()? as u64 } else { reader.read()? }, // Offset
+                data.read_string::<u32>()?, // Path
+                if bin_version == 3 { data.read_primitive::<u32>()? as u64 } else { data.read_primitive()? }, // Offset
             ));
         }
 
         let mut parsed_internal_resources: Vec<(String, String, Vec<(u32, Variant)>)> = Vec::new();
         for internal_resource in &internal_resources {
-            reader.reader().seek(std::io::SeekFrom::Start(internal_resource.1))?;
-            let r#type = reader.read_string()?;
+            data.seek(std::io::SeekFrom::Start(internal_resource.1))?;
+            let r#type = data.read_string::<u32>()?;
             let mut properties = Vec::new();
-            for _ in 0..reader.read::<u32>()? {
-                let name_index: u32 = reader.read()?;
+            for _ in 0..data.read_primitive::<u32>()? {
+                let name_index: u32 = data.read_primitive()?;
                 // println!("========== BEGIN VARIANT ==========");
                 // println!("{} at {:#x}", name_index, reader.reader().stream_position()?);
-                let variant = Variant::read(reader.reader(), bin_version, use_real64)?;
+                let variant = Variant::read(&mut data, bin_version, use_real64)?;
                 properties.push((name_index, variant));
             }
             parsed_internal_resources.push((

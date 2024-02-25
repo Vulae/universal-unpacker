@@ -34,22 +34,9 @@ pub struct CompressionZSTD {
 
 impl CompressionZSTD {
     pub fn decompress(&mut self, data: Vec<u8>) -> Result<Vec<u8>, Box<dyn Error>> {
-        // let mut ctx = zstd::zstd_safe::DCtx::create();
-        // let mut decompressed: Vec<u8> = Vec::new();
-        // decompressed.resize(4096, 0);
-        // println!("Data Len: {}", data.len());
-        // match ctx.decompress(&mut decompressed, &data) {
-        //     Ok(_) => Ok(decompressed),
-        //     Err(code) => Err(Box::new(CompressionError::ZSTDDecompressionFailed(code))),
-        // }
-
-        println!("Data Len: {}", data.len());
-        println!("{:#?}", &data[0..16]);
         let mut decoder = ruzstd::StreamingDecoder::new(Cursor::new(data))?;
         let mut result: Vec<u8> = Vec::new();
         decoder.read_to_end(&mut result)?;
-
-        println!("{}", String::from_utf8_lossy(&result));
 
         Ok(result)
     }
@@ -82,7 +69,7 @@ impl Compression {
     pub fn decompress(&mut self, data: Vec<u8>) -> Result<Vec<u8>, Box<dyn Error>> {
         match self {
             Compression::ZSTD(method) => method.decompress(data),
-            _ => panic!(),
+            method => Err(Box::new(CompressionError::UnsupportedCompressionMethod(method.clone()))),
         }
     }
 

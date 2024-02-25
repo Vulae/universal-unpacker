@@ -4,7 +4,7 @@ use bitstream_io::{Numeric, Primitive};
 
 
 
-pub trait ReadExt {
+pub trait ReadExt: Read {
 
     fn read_primitive<V: Primitive>(&mut self) -> io::Result<V>;
 
@@ -14,9 +14,9 @@ pub trait ReadExt {
         Ok(String::from_utf8(self.read_to_vec(len as usize)?)?)
     }
 
-    fn read_string<LV: Into<usize> + Primitive>(&mut self) -> Result<String, Box<dyn Error>> {
+    fn read_string<LV: TryInto<usize> + Primitive>(&mut self) -> Result<String, Box<dyn Error>> {
         let len = self.read_primitive::<LV>()?;
-        self.read_string_len(len.into())
+        self.read_string_len(len.try_into().map_err(|_| std::io::Error::new(io::ErrorKind::Other, "Failed to read string, try into usize failed."))?)
     }
 
     fn check_magic<V: Numeric + Into<usize> + Primitive>(&mut self, magic: V) -> Result<bool, Box<dyn Error>> {

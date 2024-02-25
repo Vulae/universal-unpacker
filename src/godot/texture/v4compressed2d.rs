@@ -1,7 +1,8 @@
 
-use std::{error::Error, io::Read};
+use std::{error::Error, io::{Read, Seek}};
 use bitflags::bitflags;
-use bitstream_io::{ByteRead, ByteReader, LittleEndian};
+use crate::util::read_ext::ReadExt;
+
 use super::TextureError;
 
 
@@ -57,30 +58,28 @@ pub struct V4Compressed2d {
 impl V4Compressed2d {
     pub const IDENTIFIER: [u8; 4] = *b"GST2";
 
-    pub fn load(data: impl Read) -> Result<Self, Box<dyn Error>> {
-        let mut reader = ByteReader::endian(data, LittleEndian);
+    pub fn load(data: &mut (impl Read + Seek)) -> Result<Self, Box<dyn Error>> {
+        assert!(Self::IDENTIFIER.iter().eq(data.read_primitive::<[u8; 4]>()?.iter()), "Texture identifier does not match.");
+        assert!(data.read_primitive::<u32>()? == 1, "Texture version must be 1.");
+        let original_width: u32 = data.read_primitive()?;
+        let original_height: u32 = data.read_primitive()?;
+        let flags = DataFlags::from_bits_retain(data.read_primitive()?);
+        let original_num_mips: i32 = data.read_primitive()?;
+        data.seek(std::io::SeekFrom::Current(3 * 4))?;
 
-        assert!(Self::IDENTIFIER.iter().eq(reader.read::<[u8; 4]>()?.iter()), "Texture identifier does not match.");
-        assert!(reader.read::<u32>()? == 1, "Texture version must be 1.");
-        let original_width: u32 = reader.read()?;
-        let original_height: u32 = reader.read()?;
-        let flags = DataFlags::from_bits_retain(reader.read()?);
-        let original_num_mips: i32 = reader.read()?;
-        reader.skip(3 * 4)?; // Reserved space
-
-        let data_format = DataFormat::from(reader.read()?);
-        let width: u16 = reader.read()?;
-        let height: u16 = reader.read()?;
-        let num_mips: u32 = reader.read()?;
-        let format: u32 = reader.read()?;
+        let data_format = DataFormat::from(data.read_primitive()?);
+        let width: u16 = data.read_primitive()?;
+        let height: u16 = data.read_primitive()?;
+        let num_mips: u32 = data.read_primitive()?;
+        let format: u32 = data.read_primitive()?;
 
         let mut mips: Vec<Vec<u8>> = Vec::new();
 
         match data_format {
             DataFormat::Png | DataFormat::Webp => {
                 for _ in 0..=num_mips {
-                    let len: u32 = reader.read()?;
-                    let data = reader.read_to_vec(len as usize)?;
+                    let len: u32 = data.read_primitive()?;
+                    let data = data.read_to_vec(len as usize)?;
                     mips.push(data);
                 }
             },
