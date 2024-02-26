@@ -6,6 +6,11 @@ use super::error::PickleError;
 
 
 
+// TODO: Sort enum and impls to make more sense.
+
+// TODO: Maybe some way to convert pickle to type if possible.
+// eg: let a: Vec<(String, Vec<(u64, u64)>)> = pickle.parse()?;
+
 #[derive(Debug, Clone)]
 pub enum Pickle {
     Dict(HashMap<String, Pickle>),
@@ -42,6 +47,67 @@ impl Pickle {
     }
 
 }
+
+
+
+
+
+impl TryInto<String> for Pickle {
+    type Error = PickleError;
+
+    fn try_into(self) -> Result<String, Self::Error> {
+        match self {
+            Pickle::String(str) => Ok(str),
+            _ => Err(PickleError::CannotTryInto)
+        }
+    }
+}
+
+impl TryInto<Vec<Pickle>> for Pickle {
+    type Error = PickleError;
+
+    fn try_into(self) -> Result<Vec<Pickle>, Self::Error> {
+        match self {
+            Pickle::List(vec) => Ok(vec),
+            _ => Err(PickleError::CannotTryInto)
+        }
+    }
+}
+
+impl TryInto<HashMap<String, Pickle>> for Pickle {
+    type Error = PickleError;
+
+    fn try_into(self) -> Result<HashMap<String, Pickle>, Self::Error> {
+        match self {
+            Pickle::Dict(dict) => Ok(dict),
+            _ => Err(PickleError::CannotTryInto)
+        }
+    }
+}
+
+impl TryInto<Vec<u8>> for Pickle {
+    type Error = PickleError;
+
+    fn try_into(self) -> Result<Vec<u8>, Self::Error> {
+        match self {
+            Pickle::Binary(bin) => Ok(bin),
+            _ => Err(PickleError::CannotTryInto)
+        }
+    }
+}
+
+impl TryInto<(Pickle, Pickle, Pickle)> for Pickle {
+    type Error = PickleError;
+
+    fn try_into(self) -> Result<(Pickle, Pickle, Pickle), Self::Error> {
+        match self {
+            Pickle::Tuple3((a, b, c)) => Ok((*a, *b, *c)),
+            _ => Err(PickleError::CannotTryInto)
+        }
+    }
+}
+
+
 
 
 

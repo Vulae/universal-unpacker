@@ -1,5 +1,5 @@
 
-use std::{error::Error, fmt, fs::File, io::{Cursor, Read, Seek, Write}};
+use std::{collections::HashMap, error::Error, fmt, fs::File, io::{Cursor, Read, Seek, Write}};
 use crate::util::{decode_hex, pickle::{parser::PickleParser, pickle::Pickle}, read_ext::ReadExt};
 
 
@@ -35,6 +35,10 @@ pub struct RenPyArchiveFile {
 }
 
 impl RenPyArchiveFile {
+
+    fn size(chunks: &mut Vec<(u64, u64)>) -> u64 {
+        chunks.iter().fold(0, |len, chunk| len + chunk.1)
+    }
     
     pub fn read_data(&mut self) -> Result<Vec<u8>, Box<dyn Error>> {
         let mut buf = vec![0u8; self.size as usize];
@@ -106,40 +110,21 @@ impl RenPyArchive {
         decoder.read_to_end(&mut decoded)?;
 
         let pickle = PickleParser::parse(&mut Cursor::new(decoded))?;
-
+        
         // println!("Pickle: {:#?}", pickle);
-
+        
         let mut files = Vec::new();
-
-        // TODO: Clean this shit up!
-        match pickle {
-            Pickle::Dict(dict) => {
-                for (filename, chunks) in dict {
-                    match chunks {
-                        Pickle::List(list) => {
-                            let mut file_chunks = Vec::new();
-                            for chunk in list {
-                                match chunk {
-                                    Pickle::Tuple3((offset, length, _)) => {
-                                        let offset: u64 = (*offset).try_into()?;
-                                        let length: u64 = (*length).try_into()?;
-                                        file_chunks.push((offset ^ xor, length ^ xor));
-                                    },
-                                    _ => return Err(Box::new(RenPyError::PickleParseFail)),
-                                }
-                            }
-                            files.push(RenPyArchiveFile {
-                                file: file.try_clone()?,
-                                path: filename,
-                                size: file_chunks.iter().fold(0, |size, chunk| size + chunk.1),
-                                chunks: file_chunks
-                            });
-                        }
-                        _ => return Err(Box::new(RenPyError::PickleParseFail)),
-                    }
-                }
-            },
-            _ => return Err(Box::new(RenPyError::PickleParseFail)),
+        
+        for (path, pickle_chunks) in TryInto::<HashMap<String, Pickle>>::try_into(pickle.clone())? {
+            let mut chunks = Vec::new();
+            for chunk in TryInto::<Vec<Pickle>>::try_into(pickle_chunks)? {
+                let chunk = TryInto::<(Pickle, Pickle, Pickle)>::try_into(chunk)?;
+                let offset = TryInto::<u64>::try_into(chunk.0)?;
+                let length = TryInto::<u64>::try_into(chunk.1)?;
+                chunks.push((offset ^ xor, length ^ xor));
+            }
+            
+            files.push(RenPyArchiveFile { file: file.try_clone()?, path, size: RenPyArchiveFile::size(&mut chunks), chunks });
         }
 
         Ok(RenPyArchive { files })
