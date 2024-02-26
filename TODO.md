@@ -1,6 +1,4 @@
 
-* Clean up project. (Remove byte reader and use utils::readext::ReadExt instead)
-
 # [Godot Unpacker](#godot-unpacker)
 
 * Add option to convert files to more common formats
