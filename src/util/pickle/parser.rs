@@ -355,16 +355,16 @@ impl PickleParser {
             },
             PickleOpcode::APPEND => {
                 let item = self.stack.pop()?;
-                let mut list = self.stack.pop()?;
-                list.list_push(item)?;
-                self.stack.push(list);
+                let mut list = TryInto::<Vec<Pickle>>::try_into(self.stack.pop()?)?;
+                list.push(item);
+                self.stack.push(Pickle::List(list));
             },
             PickleOpcode::SETITEM => {
                 let item = self.stack.pop()?;
-                let key = self.stack.pop()?;
-                let mut dict = self.stack.pop()?;
-                dict.dict_set(key, item)?;
-                self.stack.push(dict);
+                let key = TryInto::<String>::try_into(self.stack.pop()?)?;
+                let mut dict = TryInto::<HashMap<String, Pickle>>::try_into(self.stack.pop()?)?;
+                dict.insert(key, item);
+                self.stack.push(Pickle::Dict(dict));
             },
             PickleOpcode::STOP => { },
             PickleOpcode::MARK => {
@@ -377,13 +377,13 @@ impl PickleParser {
             },
             PickleOpcode::SETITEMS => {
                 let mut items = self.stack.pop_mark()?;
-                let mut dict = self.stack.pop()?;
+                let mut dict = TryInto::<HashMap<String, Pickle>>::try_into(self.stack.pop()?)?;
                 while items.len() > 0 {
-                    let key = items.pop().unwrap();
+                    let key = TryInto::<String>::try_into(items.pop().unwrap())?;
                     let value = items.pop().unwrap();
-                    dict.dict_set(key, value)?;
+                    dict.insert(key, value);
                 }
-                self.stack.push(dict)
+                self.stack.push(Pickle::Dict(dict))
             },
             opcode => return Err(Box::new(PickleError::UnsupportedOperation(opcode))),
         }

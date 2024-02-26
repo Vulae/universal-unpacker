@@ -1,7 +1,7 @@
 
 // https://github.com/python/cpython/blob/main/Lib/pickle.py
 
-use std::{collections::HashMap, error::Error};
+use std::collections::HashMap;
 use super::error::PickleError;
 
 
@@ -19,33 +19,6 @@ pub enum Pickle {
     Number(PickleNumber),
     Binary(Vec<u8>),
     Tuple3((Box<Pickle>, Box<Pickle>, Box<Pickle>)),
-}
-
-impl Pickle {
-
-    pub fn list_push(&mut self, item: Pickle) -> Result<(), Box<dyn Error>> {
-        match self {
-            Pickle::List(list) => list.push(item),
-            _ => return Err(Box::new(PickleError::InvalidReferencePickleType)),
-        }
-        Ok(())
-    }
-
-    pub fn dict_set(&mut self, key: Pickle, item: Pickle) -> Result<(), Box<dyn Error>> {
-        match self {
-            Pickle::Dict(dict) => {
-                let key = match key {
-                    Pickle::String(str) => str,
-                    _ => return Err(Box::new(PickleError::InvalidReferencePickleType)),
-                };
-
-                dict.insert(key, item);
-            }
-            _ => return Err(Box::new(PickleError::InvalidReferencePickleType)),
-        }
-        Ok(())
-    }
-
 }
 
 
