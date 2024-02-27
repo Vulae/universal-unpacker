@@ -4,7 +4,7 @@
 use std::{collections::HashMap, error::Error, io::Read};
 use crate::util::read_ext::ReadExt;
 
-use super::{error::PickleError, pickle::{Pickle, PickleNumber}};
+use super::{error::PickleError, pickle::{Pickle, PickleClass, PickleModule, PickleNumber}};
 
 
 
@@ -230,7 +230,7 @@ enum PickleStackItem {
 
 #[derive(Debug)]
 struct PickleMemo {
-    items: Vec<Pickle>,
+    items: Vec<PickleMemoItem>,
 }
 
 impl PickleMemo {
@@ -241,33 +241,42 @@ impl PickleMemo {
 
     pub fn get(&mut self, index: usize) -> Result<&Pickle, Box<dyn Error>> {
         match self.items.get(index) {
-            Some(item) => Ok(item),
+            Some(PickleMemoItem::Pickle(item)) => Ok(item),
+            Some(PickleMemoItem::Empty) => Err(Box::new(PickleError::MemoIndexEmpty)),
             None => Err(Box::new(PickleError::MemoIndexOutOfBounds)),
         }
     }
 
     pub fn set(&mut self, index: usize, value: Pickle) -> Result<(), Box<dyn Error>> {
-        if index >= self.items.len() {
-            return Err(Box::new(PickleError::MemoIndexOutOfBounds));
+        while index >= self.items.len() {
+            self.items.push(PickleMemoItem::Empty);
         }
 
-        self.items[index] = value;
+        self.items[index] = PickleMemoItem::Pickle(value);
 
         Ok(())
     }
 
     pub fn push(&mut self, value: Pickle) -> usize {
-        self.items.push(value);
+        self.items.push(PickleMemoItem::Pickle(value));
         self.items.len()
     }
 
     pub fn last(&mut self) -> Result<&Pickle, Box<dyn Error>> {
         match self.items.last() {
-            Some(item) => Ok(item),
+            // Last item should NEVER be empty.
+            Some(PickleMemoItem::Pickle(item)) => Ok(item),
+            Some(PickleMemoItem::Empty) => Err(Box::new(PickleError::MemoEmpty)),
             None => Err(Box::new(PickleError::MemoEmpty)),
         }
     }
 
+}
+
+#[derive(Debug, Clone)]
+enum PickleMemoItem {
+    Pickle(Pickle),
+    Empty,
 }
 
 
@@ -275,7 +284,7 @@ impl PickleMemo {
 
 
 #[derive(Debug, PartialEq, Eq)]
-enum PickleProtocol {
+pub enum PickleProtocol {
     Unknown,
     Protocol1,
     Protocol2,
@@ -288,12 +297,12 @@ impl PickleProtocol {
 
     pub fn from(value: u8) -> Result<Self, Box<dyn Error>> {
         match value {
-            1 => Err(Box::new(PickleError::UnsupportedProtocol)),
-            2 => Err(Box::new(PickleError::UnsupportedProtocol)),
-            3 => Err(Box::new(PickleError::UnsupportedProtocol)),
-            4 => Err(Box::new(PickleError::UnsupportedProtocol)),
+            1 => Err(Box::new(PickleError::UnsupportedProtocol(PickleProtocol::Protocol1))),
+            2 => Ok(PickleProtocol::Protocol2),
+            3 => Ok(PickleProtocol::Protocol3),
+            4 => Ok(PickleProtocol::Protocol4),
             5 => Ok(PickleProtocol::Protocol5),
-            _ => Err(Box::new(PickleError::UnknownProtocol)),
+            v => Err(Box::new(PickleError::UnknownProtocol(v))),
         }
     }
 
@@ -344,14 +353,14 @@ impl PickleParser {
             PickleOpcode::MEMOIZE => { self.memo.push(self.stack.last()?.clone()); }
             PickleOpcode::SHORT_BINUNICODE => { self.stack.push(Pickle::String(data.read_string::<u8>()?)); },
             PickleOpcode::EMPTY_LIST => { self.stack.push(Pickle::List(Vec::new())); },
-            PickleOpcode::BININT => { self.stack.push(Pickle::Number(PickleNumber::Int(data.read_primitive::<i32>()? as i64))) },
+            PickleOpcode::BININT => { self.stack.push(Pickle::Number(PickleNumber::Int(data.read_primitive::<i32>()?.into()))) },
             PickleOpcode::SHORT_BINBYTES => {
                 let len: u8 = data.read_primitive()?;
                 self.stack.push(Pickle::Binary(data.read_to_vec(len as usize)?));
             },
             PickleOpcode::TUPLE3 => {
                 let items = (self.stack.pop()?, self.stack.pop()?, self.stack.pop()?);
-                self.stack.push(Pickle::Tuple3((Box::new(items.2), Box::new(items.1), Box::new(items.0))));
+                self.stack.push(Pickle::Tuple(vec![items.2, items.1, items.0]));
             },
             PickleOpcode::APPEND => {
                 let item = self.stack.pop()?;
@@ -377,13 +386,64 @@ impl PickleParser {
             },
             PickleOpcode::SETITEMS => {
                 let mut items = self.stack.pop_mark()?;
-                let mut dict = TryInto::<HashMap<String, Pickle>>::try_into(self.stack.pop()?)?;
+                let mut dict = self.stack.pop()?;
                 while items.len() > 0 {
                     let key = TryInto::<String>::try_into(items.pop().unwrap())?;
                     let value = items.pop().unwrap();
-                    dict.insert(key, value);
+                    match dict {
+                        Pickle::Dict(ref mut dict) => dict.insert(key, value),
+                        Pickle::Class(ref mut class) => class.data.insert(key, value),
+                        _ => return Err(Box::new(PickleError::CannotTryInto)),
+                    };
                 }
-                self.stack.push(Pickle::Dict(dict))
+                self.stack.push(dict);
+            },
+            // TODO: Don't clone, Refactor PickleStack & PickleMemo to use pointers to pickle.
+            PickleOpcode::BINPUT => { self.memo.set(data.read_primitive::<u8>()? as usize, self.stack.last()?.clone())?; },
+            PickleOpcode::BINUNICODE => { self.stack.push(Pickle::String(data.read_string::<u32>()?)); }
+            PickleOpcode::GLOBAL => { self.stack.push(Pickle::Module(PickleModule::new(data.read_terminated_string(0x0A)?, data.read_terminated_string(0x0A)?))) }
+            PickleOpcode::TUPLE1 => {
+                let item = self.stack.pop()?;
+                self.stack.push(Pickle::Tuple(vec![item]));
+            },
+            // TODO: These aren't the same are they?
+            PickleOpcode::REDUCE | PickleOpcode::NEWOBJ => {
+                let args = self.stack.pop()?;
+                let mut module = TryInto::<PickleModule>::try_into(self.stack.pop()?)?;
+                let class = module.class(args);
+                self.stack.push(Pickle::Class(class));
+            },
+            PickleOpcode::EMPTY_TUPLE => { self.stack.push(Pickle::Tuple(Vec::new())); },
+            PickleOpcode::NONE => { self.stack.push(Pickle::None); }
+            PickleOpcode::TUPLE2 => {
+                let items = (self.stack.pop()?, self.stack.pop()?);
+                self.stack.push(Pickle::Tuple(vec![items.1, items.0]));
+            },
+            PickleOpcode::BININT1 => { self.stack.push(Pickle::Number(PickleNumber::Uint(data.read_primitive::<u8>()?.into()))); },
+            PickleOpcode::TUPLE => {
+                let mut items = self.stack.pop_mark()?;
+                items.reverse();
+                self.stack.push(Pickle::Tuple(items));
+            },
+            PickleOpcode::BUILD => {
+                let state = self.stack.pop()?;
+                let mut class = TryInto::<PickleClass>::try_into(self.stack.pop()?)?;
+                class.state = Some(Box::new(state));
+                self.stack.push(Pickle::Class(class));
+            },
+            PickleOpcode::NEWFALSE => { self.stack.push(Pickle::Bool(false)); }
+            PickleOpcode::NEWTRUE => { self.stack.push(Pickle::Bool(true)); }
+            // TODO: Don't clone, Refactor PickleStack & PickleMemo to use pointers to pickle.
+            PickleOpcode::LONG_BINPUT => { self.memo.set(data.read_primitive::<u32>()? as usize, self.stack.last()?.clone())?; },
+            // TODO: Don't clone, Refactor PickleStack & PickleMemo to use pointers to pickle.
+            PickleOpcode::LONG_BINGET => { self.stack.push(self.memo.get(data.read_primitive::<u32>()? as usize)?.clone()) }
+            PickleOpcode::APPENDS => {
+                let items = self.stack.pop_mark()?;
+                let mut list = TryInto::<Vec<Pickle>>::try_into(self.stack.pop()?)?;
+                for item in items {
+                    list.push(item);
+                }
+                self.stack.push(Pickle::List(list));
             },
             opcode => return Err(Box::new(PickleError::UnsupportedOperation(opcode))),
         }

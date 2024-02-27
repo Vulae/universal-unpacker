@@ -1,9 +1,10 @@
 
 mod archive;
+mod script;
 
 use std::{error::Error, fs::{self, File}, io::Write, path::PathBuf};
 use clap::Parser;
-use self::archive::RenPyArchive;
+use self::{archive::RenPyArchive, script::RenPyCompiledScript};
 
 
 
@@ -17,9 +18,11 @@ pub struct CliRenPy {
 
 
 
+
+
 impl CliRenPy {
 
-    pub fn extract(&self, output: &PathBuf, overwrite_output: bool) -> Result<(), Box<dyn Error>> {
+    fn extract_archive(&self, output: &PathBuf, overwrite_output: bool) -> Result<(), Box<dyn Error>> {
         let archive_file = File::open(&self.file)?;
 
         println!("Loading archive");
@@ -53,6 +56,43 @@ impl CliRenPy {
         println!("Done extracting archive");
 
         Ok(())
+    }
+
+    fn extract_compiled_script(&self, output: &PathBuf, overwrite_output: bool) -> Result<(), Box<dyn Error>> {
+        let mut archive_file = File::open(&self.file)?;
+
+        let script = RenPyCompiledScript::load(&mut archive_file)?;
+
+        match script.chunk(1) {
+            Some(mut chunk) => {
+                let pickle = chunk.pickle()?;
+                let data = format!("{:#?}", &pickle);
+
+                fs::create_dir_all(output.parent().unwrap())?;
+
+                let mut output_file = File::create(output)?;
+                output_file.write_all(&mut data.as_bytes())?;
+                output_file.flush()?;
+            },
+            _ => { }
+        }
+        
+        Ok(())
+    }
+
+    pub fn extract(&self, output: &PathBuf, overwrite_output: bool) -> Result<(), Box<dyn Error>> {
+        match &self.file.extension() {
+            Some(ext) => match ext.to_str() {
+                Some("rpa") => {
+                    self.extract_archive(output, overwrite_output)
+                },
+                Some("rpyc") => {
+                    self.extract_compiled_script(output, overwrite_output)
+                },
+                _ => panic!("CliRenPy: Invalid file extension."),
+            },
+            _ => panic!("CliRenPy: Invalid file extension."),
+        }
     }
 
 }

@@ -19,6 +19,21 @@ pub trait ReadExt: Read {
         self.read_string_len(len.try_into().map_err(|_| std::io::Error::new(io::ErrorKind::Other, "Failed to read string, try into usize failed."))?)
     }
 
+    /// Read a string terminating in byte.
+    /// 
+    /// Useful to reading to null byte or newline.
+    /// 
+    /// String may become corrupt if terminator is not a control byte.
+    fn read_terminated_string(&mut self, terminator: u8) -> Result<String, Box<dyn Error>> {
+        let mut str: Vec<u8> = Vec::new();
+        loop {
+            let value: u8 = self.read_primitive()?;
+            if value == terminator { break }
+            str.push(value);
+        }
+        Ok(String::from_utf8(str)?)
+    }
+
     fn check_magic<V: Numeric + Into<usize> + Primitive>(&mut self, magic: V) -> Result<bool, Box<dyn Error>> {
         let v = self.read_primitive::<V>()?;
         Ok(
@@ -26,7 +41,25 @@ pub trait ReadExt: Read {
             .eq(magic.to_le_bytes().as_ref())
         )
     }
-    
+
+    fn check_magic_vec(&mut self, magic: Vec<u8>) -> Result<bool, Box<dyn Error>> {
+        let bytes = self.read_to_vec(magic.len())?;
+        if magic.len() != bytes.len() {
+            return Ok(false);
+        }
+        for i in 0..magic.len() {
+            if magic[i] != bytes[i] {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+
+    fn check_magic_string<S: Into<String>>(&mut self, magic: S) -> Result<bool, Box<dyn Error>> {
+        let magic: String = magic.into();
+        self.check_magic_vec(magic.into_bytes())
+    }
+
 }
 
 

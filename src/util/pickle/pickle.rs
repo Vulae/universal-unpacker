@@ -18,10 +18,12 @@ pub enum Pickle {
     List(Vec<Pickle>),
     Number(PickleNumber),
     Binary(Vec<u8>),
-    Tuple3((Box<Pickle>, Box<Pickle>, Box<Pickle>)),
+    Tuple(Vec<Pickle>),
+    Module(PickleModule),
+    Class(PickleClass),
+    None,
+    Bool(bool),
 }
-
-
 
 
 
@@ -69,18 +71,69 @@ impl TryInto<Vec<u8>> for Pickle {
     }
 }
 
-impl TryInto<(Pickle, Pickle, Pickle)> for Pickle {
+impl TryInto<()> for Pickle {
     type Error = PickleError;
 
-    fn try_into(self) -> Result<(Pickle, Pickle, Pickle), Self::Error> {
+    fn try_into(self) -> Result<(), Self::Error> {
         match self {
-            Pickle::Tuple3((a, b, c)) => Ok((*a, *b, *c)),
+            Pickle::Tuple(tuple) => {
+                if tuple.len() == 0 {
+                    Ok(())
+                } else {
+                    Err(PickleError::CannotTryInto)
+                }
+            },
             _ => Err(PickleError::CannotTryInto)
         }
     }
 }
 
+// TODO: (Pickle)
 
+impl TryInto<(Pickle, Pickle)> for Pickle {
+    type Error = PickleError;
+
+    fn try_into(self) -> Result<(Pickle, Pickle), Self::Error> {
+        match self {
+            Pickle::Tuple(tuple) => {
+                if tuple.len() == 2 {
+                    Ok((tuple[0].clone(), tuple[1].clone()))
+                } else {
+                    Err(PickleError::CannotTryInto)
+                }
+            },
+            _ => Err(PickleError::CannotTryInto)
+        }
+    }
+}
+
+impl TryInto<(Pickle, Pickle, Pickle)> for Pickle {
+    type Error = PickleError;
+
+    fn try_into(self) -> Result<(Pickle, Pickle, Pickle), Self::Error> {
+        match self {
+            Pickle::Tuple(tuple) => {
+                if tuple.len() == 3 {
+                    Ok((tuple[0].clone(), tuple[1].clone(), tuple[2].clone()))
+                } else {
+                    Err(PickleError::CannotTryInto)
+                }
+            },
+            _ => Err(PickleError::CannotTryInto)
+        }
+    }
+}
+
+impl TryInto<bool> for Pickle {
+    type Error = PickleError;
+
+    fn try_into(self) -> Result<bool, Self::Error> {
+        match self {
+            Pickle::Bool(bool) => Ok(bool),
+            _ => Err(PickleError::CannotTryInto)
+        }
+    }
+}
 
 
 
@@ -211,3 +264,60 @@ impl TryInto<f64> for Pickle {
         }
     }
 }
+
+
+
+
+
+#[derive(Debug, Clone)]
+pub struct PickleModule {
+    pub module: String,
+    pub name: String,
+}
+
+impl PickleModule {
+    pub fn new(module: String, name: String) -> Self {
+        Self { module, name }
+    }
+
+    pub fn class(&mut self, args: Pickle) -> PickleClass {
+        PickleClass::new(self.clone(), args)
+    }
+}
+
+impl TryInto<PickleModule> for Pickle {
+    type Error = PickleError;
+
+    fn try_into(self) -> Result<PickleModule, Self::Error> {
+        match self {
+            Pickle::Module(module) => Ok(module),
+            _ => Err(PickleError::CannotTryInto)
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct PickleClass {
+    pub module: PickleModule,
+    pub args: Box<Pickle>,
+    pub state: Option<Box<Pickle>>,
+    pub data: HashMap<String, Pickle>,
+}
+
+impl TryInto<PickleClass> for Pickle {
+    type Error = PickleError;
+
+    fn try_into(self) -> Result<PickleClass, Self::Error> {
+        match self {
+            Pickle::Class(class) => Ok(class),
+            _ => Err(PickleError::CannotTryInto)
+        }
+    }
+}
+
+impl PickleClass {
+    pub fn new(module: PickleModule, args: Pickle) -> Self {
+        Self { module, args: Box::new(args), state: None, data: HashMap::new() }
+    }
+}
+
