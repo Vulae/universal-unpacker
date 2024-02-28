@@ -1,7 +1,6 @@
 
 use std::{error::Error, fs::File, io::{Read, Seek}};
 use bitflags::bitflags;
-
 use crate::util::read_ext::ReadExt;
 
 

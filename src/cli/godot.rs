@@ -2,13 +2,7 @@
 
 use std::{error::Error, fs::{self, File}, io::{Cursor, Write}, path::PathBuf};
 use clap::Parser;
-use crate::godot::resource::ResourceContainer;
-use self::{archive::GodotPck, texture::Texture};
-
-mod archive;
-mod texture;
-mod resource;
-mod compression;
+use crate::extract::godot::{archive::GodotPck, resource::ResourceContainer, texture::Texture};
 
 
 

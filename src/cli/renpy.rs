@@ -1,10 +1,8 @@
 
-mod archive;
-mod script;
-
 use std::{error::Error, fs::{self, File}, io::Write, path::PathBuf};
 use clap::Parser;
-use self::{archive::RenPyArchive, script::RenPyCompiledScript};
+
+use crate::extract::renpy::{archive::RenPyArchive, script::RenPyCompiledScript};
 
 
 
