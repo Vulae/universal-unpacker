@@ -88,7 +88,24 @@ impl TryInto<()> for Pickle {
     }
 }
 
-// TODO: (Pickle)
+// This is very dirty.
+// But I cannot figure out another way to do a single-tuple.
+impl TryInto<(Pickle, ())> for Pickle {
+    type Error = PickleError;
+
+    fn try_into(self) -> Result<(Pickle, ()), Self::Error> {
+        match self {
+            Pickle::Tuple(tuple) => {
+                if tuple.len() == 1 {
+                    Ok((tuple[0].clone(), ()))
+                } else {
+                    Err(PickleError::CannotTryInto)
+                }
+            },
+            _ => Err(PickleError::CannotTryInto)
+        }
+    }
+}
 
 impl TryInto<(Pickle, Pickle)> for Pickle {
     type Error = PickleError;
@@ -296,12 +313,20 @@ impl TryInto<PickleModule> for Pickle {
     }
 }
 
+
+
 #[derive(Debug, Clone)]
 pub struct PickleClass {
     pub module: PickleModule,
     pub args: Box<Pickle>,
     pub state: Option<Box<Pickle>>,
     pub data: HashMap<String, Pickle>,
+}
+
+impl PickleClass {
+    pub fn new(module: PickleModule, args: Pickle) -> Self {
+        Self { module, args: Box::new(args), state: None, data: HashMap::new() }
+    }
 }
 
 impl TryInto<PickleClass> for Pickle {
@@ -315,9 +340,4 @@ impl TryInto<PickleClass> for Pickle {
     }
 }
 
-impl PickleClass {
-    pub fn new(module: PickleModule, args: Pickle) -> Self {
-        Self { module, args: Box::new(args), state: None, data: HashMap::new() }
-    }
-}
 

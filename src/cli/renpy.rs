@@ -63,8 +63,8 @@ impl CliRenPy {
 
         match script.chunk(1) {
             Some(mut chunk) => {
-                let pickle = chunk.pickle()?;
-                let data = format!("{:#?}", &pickle);
+                let data = chunk.decompile()?;
+                // let data = format!("{:#?}", chunk.pickle()?);
 
                 fs::create_dir_all(output.parent().unwrap())?;
 
