@@ -6,150 +6,21 @@ use super::error::PickleError;
 
 
 
-// TODO: Sort enum and impls to make more sense.
-
 // TODO: Maybe some way to convert pickle to type if possible.
 // eg: let a: Vec<(String, Vec<(u64, u64)>)> = pickle.parse()?;
 
 #[derive(Debug, Clone)]
 pub enum Pickle {
-    Dict(HashMap<String, Pickle>),
-    String(String),
-    List(Vec<Pickle>),
+    None,
+    Bool(bool),
     Number(PickleNumber),
+    String(String),
     Binary(Vec<u8>),
+    List(Vec<Pickle>),
+    Dict(HashMap<String, Pickle>),
     Tuple(Vec<Pickle>),
     Module(PickleModule),
     Class(PickleClass),
-    None,
-    Bool(bool),
-}
-
-
-
-impl TryInto<String> for Pickle {
-    type Error = PickleError;
-
-    fn try_into(self) -> Result<String, Self::Error> {
-        match self {
-            Pickle::String(str) => Ok(str),
-            _ => Err(PickleError::CannotTryInto)
-        }
-    }
-}
-
-impl TryInto<Vec<Pickle>> for Pickle {
-    type Error = PickleError;
-
-    fn try_into(self) -> Result<Vec<Pickle>, Self::Error> {
-        match self {
-            Pickle::List(vec) => Ok(vec),
-            _ => Err(PickleError::CannotTryInto)
-        }
-    }
-}
-
-impl TryInto<HashMap<String, Pickle>> for Pickle {
-    type Error = PickleError;
-
-    fn try_into(self) -> Result<HashMap<String, Pickle>, Self::Error> {
-        match self {
-            Pickle::Dict(dict) => Ok(dict),
-            _ => Err(PickleError::CannotTryInto)
-        }
-    }
-}
-
-impl TryInto<Vec<u8>> for Pickle {
-    type Error = PickleError;
-
-    fn try_into(self) -> Result<Vec<u8>, Self::Error> {
-        match self {
-            Pickle::Binary(bin) => Ok(bin),
-            _ => Err(PickleError::CannotTryInto)
-        }
-    }
-}
-
-impl TryInto<()> for Pickle {
-    type Error = PickleError;
-
-    fn try_into(self) -> Result<(), Self::Error> {
-        match self {
-            Pickle::Tuple(tuple) => {
-                if tuple.len() == 0 {
-                    Ok(())
-                } else {
-                    Err(PickleError::CannotTryInto)
-                }
-            },
-            _ => Err(PickleError::CannotTryInto)
-        }
-    }
-}
-
-// This is very dirty.
-// But I cannot figure out another way to do a single-tuple.
-impl TryInto<(Pickle, ())> for Pickle {
-    type Error = PickleError;
-
-    fn try_into(self) -> Result<(Pickle, ()), Self::Error> {
-        match self {
-            Pickle::Tuple(tuple) => {
-                if tuple.len() == 1 {
-                    Ok((tuple[0].clone(), ()))
-                } else {
-                    Err(PickleError::CannotTryInto)
-                }
-            },
-            _ => Err(PickleError::CannotTryInto)
-        }
-    }
-}
-
-impl TryInto<(Pickle, Pickle)> for Pickle {
-    type Error = PickleError;
-
-    fn try_into(self) -> Result<(Pickle, Pickle), Self::Error> {
-        match self {
-            Pickle::Tuple(tuple) => {
-                if tuple.len() == 2 {
-                    Ok((tuple[0].clone(), tuple[1].clone()))
-                } else {
-                    Err(PickleError::CannotTryInto)
-                }
-            },
-            _ => Err(PickleError::CannotTryInto)
-        }
-    }
-}
-
-impl TryInto<(Pickle, Pickle, Pickle)> for Pickle {
-    type Error = PickleError;
-
-    fn try_into(self) -> Result<(Pickle, Pickle, Pickle), Self::Error> {
-        match self {
-            Pickle::Tuple(tuple) => {
-                if tuple.len() == 3 {
-                    Ok((tuple[0].clone(), tuple[1].clone(), tuple[2].clone()))
-                } else {
-                    Err(PickleError::CannotTryInto)
-                }
-            },
-            _ => Err(PickleError::CannotTryInto)
-        }
-    }
-}
-
-impl TryInto<bool> for Pickle {
-    type Error = PickleError;
-
-    fn try_into(self) -> Result<bool, Self::Error> {
-        match self {
-            Pickle::Bool(bool) => Ok(bool),
-            _ => Err(PickleError::CannotTryInto)
-        }
-    }
 }
 
 
@@ -160,129 +31,6 @@ pub enum PickleNumber {
     Uint(u64),
     Float(f64),
 }
-
-
-
-// TODO: Change to macro.
-impl TryInto<u8> for Pickle {
-    type Error = PickleError;
-
-    fn try_into(self) -> Result<u8, Self::Error> {
-        match self {
-            Pickle::Number(PickleNumber::Int(v)) => v.try_into().map_err(|_| PickleError::CannotTryInto),
-            Pickle::Number(PickleNumber::Uint(v)) => v.try_into().map_err(|_| PickleError::CannotTryInto),
-            _ => Err(PickleError::CannotTryInto),
-        }
-    }
-}
-
-impl TryInto<u16> for Pickle {
-    type Error = PickleError;
-
-    fn try_into(self) -> Result<u16, Self::Error> {
-        match self {
-            Pickle::Number(PickleNumber::Int(v)) => v.try_into().map_err(|_| PickleError::CannotTryInto),
-            Pickle::Number(PickleNumber::Uint(v)) => v.try_into().map_err(|_| PickleError::CannotTryInto),
-            _ => Err(PickleError::CannotTryInto),
-        }
-    }
-}
-
-impl TryInto<u32> for Pickle {
-    type Error = PickleError;
-
-    fn try_into(self) -> Result<u32, Self::Error> {
-        match self {
-            Pickle::Number(PickleNumber::Int(v)) => v.try_into().map_err(|_| PickleError::CannotTryInto),
-            Pickle::Number(PickleNumber::Uint(v)) => v.try_into().map_err(|_| PickleError::CannotTryInto),
-            _ => Err(PickleError::CannotTryInto),
-        }
-    }
-}
-
-impl TryInto<u64> for Pickle {
-    type Error = PickleError;
-
-    fn try_into(self) -> Result<u64, Self::Error> {
-        match self {
-            Pickle::Number(PickleNumber::Int(v)) => v.try_into().map_err(|_| PickleError::CannotTryInto),
-            Pickle::Number(PickleNumber::Uint(v)) => Ok(v),
-            _ => Err(PickleError::CannotTryInto),
-        }
-    }
-}
-
-impl TryInto<i8> for Pickle {
-    type Error = PickleError;
-
-    fn try_into(self) -> Result<i8, Self::Error> {
-        match self {
-            Pickle::Number(PickleNumber::Int(v)) => v.try_into().map_err(|_| PickleError::CannotTryInto),
-            Pickle::Number(PickleNumber::Uint(v)) => v.try_into().map_err(|_| PickleError::CannotTryInto),
-            _ => Err(PickleError::CannotTryInto),
-        }
-    }
-}
-
-impl TryInto<i16> for Pickle {
-    type Error = PickleError;
-
-    fn try_into(self) -> Result<i16, Self::Error> {
-        match self {
-            Pickle::Number(PickleNumber::Int(v)) => v.try_into().map_err(|_| PickleError::CannotTryInto),
-            Pickle::Number(PickleNumber::Uint(v)) => v.try_into().map_err(|_| PickleError::CannotTryInto),
-            _ => Err(PickleError::CannotTryInto),
-        }
-    }
-}
-
-impl TryInto<i32> for Pickle {
-    type Error = PickleError;
-
-    fn try_into(self) -> Result<i32, Self::Error> {
-        match self {
-            Pickle::Number(PickleNumber::Int(v)) => v.try_into().map_err(|_| PickleError::CannotTryInto),
-            Pickle::Number(PickleNumber::Uint(v)) => v.try_into().map_err(|_| PickleError::CannotTryInto),
-            _ => Err(PickleError::CannotTryInto),
-        }
-    }
-}
-
-impl TryInto<i64> for Pickle {
-    type Error = PickleError;
-
-    fn try_into(self) -> Result<i64, Self::Error> {
-        match self {
-            Pickle::Number(PickleNumber::Int(v)) => Ok(v),
-            Pickle::Number(PickleNumber::Uint(v)) => v.try_into().map_err(|_| PickleError::CannotTryInto),
-            _ => Err(PickleError::CannotTryInto),
-        }
-    }
-}
-
-impl TryInto<f32> for Pickle {
-    type Error = PickleError;
-
-    fn try_into(self) -> Result<f32, Self::Error> {
-        match self {
-            Pickle::Number(PickleNumber::Float(v)) => Ok(v as f32), // Precision loss.
-            _ => Err(PickleError::CannotTryInto),
-        }
-    }
-}
-
-impl TryInto<f64> for Pickle {
-    type Error = PickleError;
-
-    fn try_into(self) -> Result<f64, Self::Error> {
-        match self {
-            Pickle::Number(PickleNumber::Float(v)) => Ok(v),
-            _ => Err(PickleError::CannotTryInto),
-        }
-    }
-}
-
-
 
 
 
@@ -302,17 +50,6 @@ impl PickleModule {
     }
 }
 
-impl TryInto<PickleModule> for Pickle {
-    type Error = PickleError;
-
-    fn try_into(self) -> Result<PickleModule, Self::Error> {
-        match self {
-            Pickle::Module(module) => Ok(module),
-            _ => Err(PickleError::CannotTryInto)
-        }
-    }
-}
-
 
 
 #[derive(Debug, Clone)]
@@ -329,15 +66,97 @@ impl PickleClass {
     }
 }
 
-impl TryInto<PickleClass> for Pickle {
-    type Error = PickleError;
 
-    fn try_into(self) -> Result<PickleClass, Self::Error> {
-        match self {
-            Pickle::Class(class) => Ok(class),
-            _ => Err(PickleError::CannotTryInto)
+
+
+
+macro_rules! pickle_try_into {
+    ($type:ty, $match_head:pat, $match_body:block) => (
+        impl TryInto<$type> for Pickle {
+            type Error = PickleError;
+
+            fn try_into(self) -> Result<$type, Self::Error> {
+                match self {
+                    $match_head => $match_body,
+                    _ => Err(PickleError::CannotTryInto),
+                }
+            }
         }
-    }
+
+        impl TryInto<Option<$type>> for Pickle {
+            type Error = PickleError;
+
+            fn try_into(self) -> Result<Option<$type>, Self::Error> {
+                match self {
+                    $match_head => {
+                        match $match_body {
+                            Ok(v) => Ok(Some(v)),
+                            Err(err) => Err(err)
+                        }
+                    },
+                    Pickle::None => Ok(None),
+                    _ => Err(PickleError::CannotTryInto),
+                }
+            }
+        }
+    )
 }
+
+
+
+pickle_try_into!(bool, Pickle::Bool(bool), { Ok(bool) });
+
+pickle_try_into!(u8, Pickle::Number(PickleNumber::Uint(v)), { v.try_into().map_err(|_| PickleError::CannotTryInto) });
+pickle_try_into!(u16, Pickle::Number(PickleNumber::Uint(v)), { v.try_into().map_err(|_| PickleError::CannotTryInto) });
+pickle_try_into!(u32, Pickle::Number(PickleNumber::Uint(v)), { v.try_into().map_err(|_| PickleError::CannotTryInto) });
+pickle_try_into!(u64, Pickle::Number(PickleNumber::Uint(v)), { v.try_into().map_err(|_| PickleError::CannotTryInto) });
+pickle_try_into!(i8, Pickle::Number(PickleNumber::Int(v)), { v.try_into().map_err(|_| PickleError::CannotTryInto) });
+pickle_try_into!(i16, Pickle::Number(PickleNumber::Int(v)), { v.try_into().map_err(|_| PickleError::CannotTryInto) });
+pickle_try_into!(i32, Pickle::Number(PickleNumber::Int(v)), { v.try_into().map_err(|_| PickleError::CannotTryInto) });
+pickle_try_into!(i64, Pickle::Number(PickleNumber::Int(v)), { v.try_into().map_err(|_| PickleError::CannotTryInto) });
+pickle_try_into!(f32, Pickle::Number(PickleNumber::Float(v)), { Ok(v as f32) }); // Precision loss.
+pickle_try_into!(f64, Pickle::Number(PickleNumber::Float(v)), { v.try_into().map_err(|_| PickleError::CannotTryInto) });
+
+pickle_try_into!(String, Pickle::String(str), { Ok(str) });
+
+pickle_try_into!(Vec<u8>, Pickle::Binary(bin), { Ok(bin) });
+
+pickle_try_into!(Vec<Pickle>, Pickle::List(vec), { Ok(vec) });
+
+pickle_try_into!(HashMap<String, Pickle>, Pickle::Dict(dict), { Ok(dict) });
+
+pickle_try_into!((), Pickle::Tuple(tuple), {
+    if tuple.len() == 0 {
+        Ok(())
+    } else {
+        Err(PickleError::CannotTryInto)
+    }
+});
+// This is very dirty.
+// But I cannot figure out another way to do a single-tuple.
+pickle_try_into!((Pickle, ()), Pickle::Tuple(tuple), {
+    if tuple.len() == 1 {
+        Ok((tuple[0].clone(), ()))
+    } else {
+        Err(PickleError::CannotTryInto)
+    }
+});
+pickle_try_into!((Pickle, Pickle), Pickle::Tuple(tuple), {
+    if tuple.len() == 2 {
+        Ok((tuple[0].clone(), tuple[1].clone()))
+    } else {
+        Err(PickleError::CannotTryInto)
+    }
+});
+pickle_try_into!((Pickle, Pickle, Pickle), Pickle::Tuple(tuple), {
+    if tuple.len() == 3 {
+        Ok((tuple[0].clone(), tuple[1].clone(), tuple[2].clone()))
+    } else {
+        Err(PickleError::CannotTryInto)
+    }
+});
+
+pickle_try_into!(PickleModule, Pickle::Module(module), { Ok(module) });
+pickle_try_into!(PickleClass, Pickle::Class(class), { Ok(class) });
 
 
