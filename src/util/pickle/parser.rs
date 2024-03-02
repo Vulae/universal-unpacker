@@ -209,7 +209,7 @@ impl PickleStack {
 
         loop {
             match self.stack.pop() {
-                Some(PickleStackItem::Pickle(item)) => items.push(item),
+                Some(PickleStackItem::Pickle(item)) => items.insert(0, item),
                 Some(PickleStackItem::Mark) => break,
                 None => return Err(Box::new(PickleError::StackEmpty)),
             }
@@ -388,8 +388,8 @@ impl PickleParser {
                 let mut items = self.stack.pop_mark()?;
                 let mut dict = self.stack.pop()?;
                 while items.len() > 0 {
-                    let key = TryInto::<String>::try_into(items.pop().unwrap())?;
                     let value = items.pop().unwrap();
+                    let key = TryInto::<String>::try_into(items.pop().unwrap())?;
                     match dict {
                         Pickle::Dict(ref mut dict) => dict.insert(key, value),
                         Pickle::Class(ref mut class) => class.data.insert(key, value),
@@ -438,11 +438,9 @@ impl PickleParser {
             // TODO: Don't clone, Refactor PickleStack & PickleMemo to use pointers to pickle.
             PickleOpcode::LONG_BINGET => { self.stack.push(self.memo.get(data.read_primitive::<u32>()? as usize)?.clone()) }
             PickleOpcode::APPENDS => {
-                let items = self.stack.pop_mark()?;
+                let mut items = self.stack.pop_mark()?;
                 let mut list = TryInto::<Vec<Pickle>>::try_into(self.stack.pop()?)?;
-                for item in items {
-                    list.push(item);
-                }
+                list.append(&mut items);
                 self.stack.push(Pickle::List(list));
             },
             opcode => return Err(Box::new(PickleError::UnsupportedOperation(opcode))),
