@@ -13,34 +13,29 @@ mod ast;
 
 
 
-
-
-pub fn node_extract_data(node: Pickle, keys: Vec<&str>) -> Result<Vec<Pickle>, Box<dyn Error>> {
+pub fn node_extract_data(node: &Pickle, key: &str) -> Result<Pickle, Box<dyn Error>> {
     let class: PickleClass = node.clone().try_into()?;
     let dict: HashMap<String, Pickle> = TryInto::<(Pickle, Pickle)>::try_into(*class.state.unwrap())?.1.try_into()?;
-    Ok(keys
-        .iter()
-        .map(|key| {
-            if let Some(item) = dict.get(*key) {
-                item.clone()
-            } else {
-                panic!("Failed to extract node data.")
-            }
-        })
-        .collect::<Vec<_>>())
+    if let Some(item) = dict.get(key) {
+        Ok(item.clone())
+    } else {
+        panic!("Unable to extract node pickle data.")
+    }
 }
-
-
 
 
 
 pub fn parse_node(node: Pickle) -> Result<String, Box<dyn Error>> {
     let class: PickleClass = node.clone().try_into()?;
 
-    match class.module.module.as_str() {
-        "renpy.ast" => parse_node_ast(node),
-        module => { println!("Unknown module. {}", module); Ok(String::new()) },
-    }
+    Ok(match class.module.module.as_str() {
+        "renpy.ast" => parse_node_ast(node)?,
+        module => format!("***DECOMPILE ERROR: Unknown module. {}***", module),
+    })
+}
+
+pub fn indent(str: String) -> String {
+    str.split("\n").map(|str| format!("\t{}", str)).collect::<Vec<_>>().join("\n")
 }
 
 

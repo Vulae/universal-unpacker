@@ -121,7 +121,7 @@ pickle_try_into!(String, Pickle::String(str), { Ok(str) });
 
 pickle_try_into!(Vec<u8>, Pickle::Binary(bin), { Ok(bin) });
 
-pickle_try_into!(Vec<Pickle>, Pickle::List(vec), { Ok(vec) });
+pickle_try_into!(Vec<Pickle>, Pickle::List(vec) | Pickle::Tuple(vec), { Ok(vec) });
 
 pickle_try_into!(HashMap<String, Pickle>, Pickle::Dict(dict), { Ok(dict) });
 
@@ -155,6 +155,36 @@ pickle_try_into!((Pickle, Pickle, Pickle), Pickle::Tuple(tuple), {
         Err(PickleError::CannotTryInto)
     }
 });
+pickle_try_into!((Pickle, Pickle, Pickle, Pickle), Pickle::Tuple(tuple), {
+    if tuple.len() == 4 {
+        Ok((tuple[0].clone(), tuple[1].clone(), tuple[2].clone(), tuple[3].clone()))
+    } else {
+        Err(PickleError::CannotTryInto)
+    }
+});
+pickle_try_into!((Pickle, Pickle, Pickle, Pickle, Pickle), Pickle::Tuple(tuple), {
+    if tuple.len() == 5 {
+        Ok((tuple[0].clone(), tuple[1].clone(), tuple[2].clone(), tuple[3].clone(), tuple[4].clone()))
+    } else {
+        Err(PickleError::CannotTryInto)
+    }
+});
+pickle_try_into!((Pickle, Pickle, Pickle, Pickle, Pickle, Pickle), Pickle::Tuple(tuple), {
+    if tuple.len() == 6 {
+        Ok((tuple[0].clone(), tuple[1].clone(), tuple[2].clone(), tuple[3].clone(), tuple[4].clone(), tuple[5].clone()))
+    } else {
+        Err(PickleError::CannotTryInto)
+    }
+});
+pickle_try_into!((Pickle, Pickle, Pickle, Pickle, Pickle, Pickle, Pickle), Pickle::Tuple(tuple), {
+    if tuple.len() == 7 {
+        Ok((tuple[0].clone(), tuple[1].clone(), tuple[2].clone(), tuple[3].clone(), tuple[4].clone(), tuple[5].clone(), tuple[6].clone()))
+    } else {
+        Err(PickleError::CannotTryInto)
+    }
+});
+
+
 
 pickle_try_into!(PickleModule, Pickle::Module(module), { Ok(module) });
 pickle_try_into!(PickleClass, Pickle::Class(class), { Ok(class) });
