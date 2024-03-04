@@ -17,3 +17,20 @@ pub fn decode_hex(hex_string: &str) -> Result<Vec<u8>, ParseIntError> {
 }
 
 
+
+// TODO: Is there any way to get better error messages for this?
+#[macro_export]
+macro_rules! hashmap {
+    () => (
+        std::collections::HashMap::new()
+    );
+    ($(($key:expr, $value:expr)),+ $(,)?) => ({
+        let mut map = std::collections::HashMap::new();
+        $(
+            map.insert($key, $value);
+        )*
+        map
+    });
+}
+
+

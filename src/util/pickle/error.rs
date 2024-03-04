@@ -18,6 +18,7 @@ pub enum PickleError {
     InvalidOperation(u8),
     InvalidReferencePickleType,
     CannotTryInto,
+    CannotExtract,
 }
 
 impl fmt::Display for PickleError {
@@ -35,6 +36,7 @@ impl fmt::Display for PickleError {
             Self::InvalidOperation(opcode) => write!(f, "Pickle invalid operation {:x}", opcode),
             Self::InvalidReferencePickleType => write!(f, "Pickle tried to reference pickle that is not correct type."),
             Self::CannotTryInto => write!(f, "Pickle cannot try into."),
+            Self::CannotExtract => write!(f, "Pickle cannot extract."),
         }
     }
 }
