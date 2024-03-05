@@ -13,5 +13,6 @@ bitflags = "2.4.2"
 bitstream-io = "2.2.0"
 clap = { version = "4.5.1", features = ["derive"] }
 flate2 = "1.0.28"
+regex = "1.10.3"
 ruzstd = "0.6.0"
 zstd = "0.13.0"

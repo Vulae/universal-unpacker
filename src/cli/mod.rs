@@ -1,11 +1,12 @@
 
 pub mod godot;
 pub mod renpy;
+pub mod source_engine;
 
 use std::{error::Error, fs, path::PathBuf};
 use clap::{Parser, Subcommand, ValueEnum};
 
-use self::{godot::CliGodotPck, renpy::CliRenPy};
+use self::{godot::CliGodotPck, renpy::CliRenPy, source_engine::CliSource};
 
 
 
@@ -43,6 +44,7 @@ enum Commands {
 enum ExtractionMethods {
     GodotPck(CliGodotPck),
     RenPyArchive(CliRenPy),
+    SourceEngine(CliSource),
 }
 
 impl ExtractionMethods {
@@ -50,6 +52,7 @@ impl ExtractionMethods {
         match self {
             ExtractionMethods::GodotPck(method) => method.extract(output, overwrite_output)?,
             ExtractionMethods::RenPyArchive(method) => method.extract(output, overwrite_output)?,
+            ExtractionMethods::SourceEngine(method) => method.extract(output, overwrite_output)?,
         }
         Ok(())
     }

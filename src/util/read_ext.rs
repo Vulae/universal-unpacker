@@ -34,7 +34,7 @@ pub trait ReadExt: Read {
         Ok(String::from_utf8(str)?)
     }
 
-    fn check_magic<V: Numeric + Into<usize> + Primitive>(&mut self, magic: V) -> Result<bool, Box<dyn Error>> {
+    fn check_magic<V: Numeric + Primitive>(&mut self, magic: V) -> Result<bool, Box<dyn Error>> {
         let v = self.read_primitive::<V>()?;
         Ok(
             v.to_le_bytes().as_ref()
