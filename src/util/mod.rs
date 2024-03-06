@@ -1,6 +1,7 @@
 
 pub mod read_ext;
 pub mod pickle;
+pub mod virtual_fs;
 
 use std::num::ParseIntError;
 

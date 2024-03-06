@@ -2,7 +2,7 @@
 use std::{error::Error, fs::{self, File}, io::{Seek, SeekFrom}, path::PathBuf};
 use regex::Regex;
 
-use crate::util::read_ext::ReadExt;
+use crate::util::{read_ext::ReadExt, virtual_fs::{VirtualDirectory, VirtualEntry, VirtualFile}};
 
 
 
@@ -82,24 +82,27 @@ impl SourceEngineVpkArchiveFiles {
 #[derive(Debug)]
 pub struct SourceEngineVPKFile {
     archive_file: File,
-    pub path: String,
+    path: String,
     offset: u32,
-    pub length: u32,
+    length: u32,
+    preload: Vec<u8>,
 }
 
-impl SourceEngineVPKFile {
-
-    // TODO: Checksum.
-    pub fn read_data(&mut self) -> Result<Vec<u8>, Box<dyn Error>> {
-        self.archive_file.seek(SeekFrom::Start(self.offset as u64))?;
-        Ok(self.archive_file.read_to_vec(self.length as usize)?)
+impl VirtualFile for SourceEngineVPKFile {
+    fn path(&mut self) -> &str {
+        &self.path
     }
 
+    fn read_data(&mut self) -> Result<Vec<u8>, Box<dyn Error>> {
+        self.archive_file.seek(SeekFrom::Start(self.offset as u64))?;
+        let data = self.archive_file.read_to_vec(self.length as usize)?;
+        Ok(vec![self.preload.clone(), data].concat())
+    }
 }
 
 #[derive(Debug)]
 pub struct SourceEngineVpkArchive {
-    pub files: Vec<SourceEngineVPKFile>,
+    files: Vec<SourceEngineVPKFile>,
 }
 
 impl SourceEngineVpkArchive {
@@ -140,11 +143,6 @@ impl SourceEngineVpkArchive {
 
                     assert!(archive_dir.check_magic::<u16>(0xFFFF)?);
 
-                    if preload > 0 {
-                        println!("Preload files not supported.");
-                        continue;
-                    }
-
                     files.push(SourceEngineVPKFile {
                         archive_file: (if archive_index == 0x7FFF {
                             archive_dir.try_clone()?
@@ -153,7 +151,8 @@ impl SourceEngineVpkArchive {
                         }),
                         path: if path.trim().is_empty() { format!("{}.{}", name, ext) } else { format!("{}/{}.{}", path, name, ext) },
                         offset: (if archive_index == 0x7FFF { offset + (end_of_dir as u32) } else { offset }),
-                        length
+                        length,
+                        preload: archive_dir.read_to_vec(preload as usize)?,
                     });
                 }
             }
@@ -164,4 +163,17 @@ impl SourceEngineVpkArchive {
 
 }
 
+impl VirtualDirectory<SourceEngineVPKFile, SourceEngineVpkArchive> for SourceEngineVpkArchive {
+    fn path(&mut self) -> &str {
+        ""
+    }
+
+    fn read_entries(&mut self) -> Result<Vec<VirtualEntry<SourceEngineVPKFile, SourceEngineVpkArchive>>, Box<dyn Error>> {
+        let mut entries: Vec<VirtualEntry<SourceEngineVPKFile, SourceEngineVpkArchive>> = Vec::new();
+        self.files.iter_mut().for_each(|file| {
+            entries.push(VirtualEntry::File(file));
+        });
+        Ok(entries)
+    }
+}
 
