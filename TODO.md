@@ -1,11 +1,20 @@
 
 # [Godot Unpacker](#godot-unpacker)
 
-* Add option to convert files to more common formats
+* Better conversion
+    * (Better texture support, & audio files.)
+
+# [Ren'Py Unpacker](#renpy-unpacker)
+
+* Better compiled script decompiler
+    * (Rewrite)
+
+# [Source Engine Unpacker](#source-engine-unpacker)
+
+* Convert [.vtf](https://developer.valvesoftware.com/wiki/VTF_(Valve_Texture_Format)) textures.
 
 # [Future Unpackers](#future-unpackers)
 
-* [Valve pak file](https://developer.valvesoftware.com/wiki/VPK_(file_format)) (.vpk)
 * Unity assets
 * Ren'Py compiled script decompiler (.rpyc)
 * Unreal Engine 4 archive (.pak)
