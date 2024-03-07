@@ -1,6 +1,6 @@
 
 use std::{collections::HashMap, error::Error, fmt, fs::File, io::{Cursor, Read, Seek, Write}};
-use crate::util::{decode_hex, pickle::{parser::PickleParser, pickle::Pickle}, read_ext::ReadExt};
+use crate::util::{decode_hex, pickle::{parser::PickleParser, pickle::Pickle}, read_ext::ReadExt, virtual_fs::{VirtualDirectory, VirtualEntry, VirtualFile}};
 
 
 
@@ -29,19 +29,19 @@ impl Error for RenPyError { }
 #[derive(Debug)]
 pub struct RenPyArchiveFile {
     file: File,
-    pub path: String,
-    pub size: u64,
-    pub chunks: Vec<(u64, u64)>,
+    path: String,
+    chunks: Vec<(u64, u64)>,
 }
 
-impl RenPyArchiveFile {
-
-    fn size(chunks: &mut Vec<(u64, u64)>) -> u64 {
-        chunks.iter().fold(0, |len, chunk| len + chunk.1)
+impl VirtualFile for RenPyArchiveFile {
+    fn path(&mut self) -> &str {
+        &self.path
     }
-    
-    pub fn read_data(&mut self) -> Result<Vec<u8>, Box<dyn Error>> {
-        let mut buf = vec![0u8; self.size as usize];
+
+    fn read_data(&mut self) -> Result<Vec<u8>, Box<dyn Error>> {
+        let size = self.chunks.iter().fold(0, |total, (_, size)| total + size);
+
+        let mut buf = vec![0u8; size as usize];
         let mut buf_cursor = Cursor::new(&mut buf);
 
         for chunk in &self.chunks {
@@ -53,16 +53,13 @@ impl RenPyArchiveFile {
 
         Ok(buf)
     }
-
 }
-
-
 
 
 
 #[derive(Debug)]
 pub struct RenPyArchive {
-    pub files: Vec<RenPyArchiveFile>,
+    files: Vec<RenPyArchiveFile>,
 }
 
 impl RenPyArchive {
@@ -124,7 +121,7 @@ impl RenPyArchive {
                 chunks.push((offset ^ xor, length ^ xor));
             }
             
-            files.push(RenPyArchiveFile { file: file.try_clone()?, path, size: RenPyArchiveFile::size(&mut chunks), chunks });
+            files.push(RenPyArchiveFile { file: file.try_clone()?, path, chunks });
         }
 
         Ok(RenPyArchive { files })
@@ -132,4 +129,16 @@ impl RenPyArchive {
 
 }
 
+impl VirtualDirectory<RenPyArchiveFile, RenPyArchive> for RenPyArchive {
+    fn path(&mut self) -> &str {
+        ""
+    }
 
+    fn read_entries(&mut self) -> Result<Vec<VirtualEntry<RenPyArchiveFile, RenPyArchive>>, Box<dyn Error>> {
+        let mut entries: Vec<VirtualEntry<RenPyArchiveFile, RenPyArchive>> = Vec::new();
+        self.files.iter_mut().for_each(|file| {
+            entries.push(VirtualEntry::File(file));
+        });
+        Ok(entries)
+    }
+}

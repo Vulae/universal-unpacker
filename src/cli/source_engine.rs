@@ -16,6 +16,7 @@ pub struct CliSource {
 impl CliSource {
 
     fn mapper(path: String, data: &mut Vec<u8>) -> Result<Option<(String, Vec<u8>)>, Box<dyn Error>> {
+        println!("File: \"{}\"", path);
         Ok(None)
     }
 

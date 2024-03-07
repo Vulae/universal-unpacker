@@ -353,7 +353,7 @@ impl PickleParser {
             PickleOpcode::MEMOIZE => { self.memo.push(self.stack.last()?.clone()); }
             PickleOpcode::SHORT_BINUNICODE => { self.stack.push(Pickle::String(data.read_string::<u8>()?)); },
             PickleOpcode::EMPTY_LIST => { self.stack.push(Pickle::List(Vec::new())); },
-            PickleOpcode::BININT => { self.stack.push(Pickle::Number(PickleNumber::Int(data.read_primitive::<i32>()?.into()))) },
+            PickleOpcode::BININT => { self.stack.push(Pickle::Number(PickleNumber::Int(data.read_primitive::<i32>()?.into()))); },
             PickleOpcode::SHORT_BINBYTES => {
                 let len: u8 = data.read_primitive()?;
                 self.stack.push(Pickle::Binary(data.read_to_vec(len as usize)?));
@@ -371,9 +371,13 @@ impl PickleParser {
             PickleOpcode::SETITEM => {
                 let item = self.stack.pop()?;
                 let key = TryInto::<String>::try_into(self.stack.pop()?)?;
-                let mut dict = TryInto::<HashMap<String, Pickle>>::try_into(self.stack.pop()?)?;
-                dict.insert(key, item);
-                self.stack.push(Pickle::Dict(dict));
+                let mut dict = self.stack.pop()?;
+                match dict {
+                    Pickle::Dict(ref mut dict) => dict.insert(key, item),
+                    Pickle::Class(ref mut class) => class.data.insert(key, item),
+                    _ => return Err(Box::new(PickleError::CannotTryInto)),
+                };
+                self.stack.push(dict);
             },
             PickleOpcode::STOP => { },
             PickleOpcode::MARK => {
@@ -436,12 +440,18 @@ impl PickleParser {
             // TODO: Don't clone, Refactor PickleStack & PickleMemo to use pointers to pickle.
             PickleOpcode::LONG_BINPUT => { self.memo.set(data.read_primitive::<u32>()? as usize, self.stack.last()?.clone())?; },
             // TODO: Don't clone, Refactor PickleStack & PickleMemo to use pointers to pickle.
-            PickleOpcode::LONG_BINGET => { self.stack.push(self.memo.get(data.read_primitive::<u32>()? as usize)?.clone()) }
+            PickleOpcode::LONG_BINGET => { self.stack.push(self.memo.get(data.read_primitive::<u32>()? as usize)?.clone()); }
             PickleOpcode::APPENDS => {
                 let mut items = self.stack.pop_mark()?;
                 let mut list = TryInto::<Vec<Pickle>>::try_into(self.stack.pop()?)?;
                 list.append(&mut items);
                 self.stack.push(Pickle::List(list));
+            },
+            PickleOpcode::BININT2 => { self.stack.push(Pickle::Number(PickleNumber::Int(data.read_primitive::<u16>()?.into()))); },
+            PickleOpcode::LONG1 => {
+                let length: u8 = data.read_primitive()?;
+                let bytes = data.read_to_vec(length as usize)?;
+                self.stack.push(Pickle::Number(PickleNumber::BigInt(bytes)));
             },
             opcode => return Err(Box::new(PickleError::UnsupportedOperation(opcode))),
         }

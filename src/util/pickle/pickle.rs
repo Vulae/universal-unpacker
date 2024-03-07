@@ -31,6 +31,7 @@ pub enum PickleNumber {
     Int(i64),
     Uint(u64),
     Float(f64),
+    BigInt(Vec<u8>),
 }
 
 
@@ -107,14 +108,29 @@ macro_rules! pickle_try_into {
 
 pickle_try_into!(bool, Pickle::Bool(bool), { Ok(bool) });
 
-pickle_try_into!(u8, Pickle::Number(PickleNumber::Uint(v)), { v.try_into().map_err(|_| PickleError::CannotTryInto) });
-pickle_try_into!(u16, Pickle::Number(PickleNumber::Uint(v)), { v.try_into().map_err(|_| PickleError::CannotTryInto) });
-pickle_try_into!(u32, Pickle::Number(PickleNumber::Uint(v)), { v.try_into().map_err(|_| PickleError::CannotTryInto) });
-pickle_try_into!(u64, Pickle::Number(PickleNumber::Uint(v)), { v.try_into().map_err(|_| PickleError::CannotTryInto) });
-pickle_try_into!(i8, Pickle::Number(PickleNumber::Int(v)), { v.try_into().map_err(|_| PickleError::CannotTryInto) });
-pickle_try_into!(i16, Pickle::Number(PickleNumber::Int(v)), { v.try_into().map_err(|_| PickleError::CannotTryInto) });
-pickle_try_into!(i32, Pickle::Number(PickleNumber::Int(v)), { v.try_into().map_err(|_| PickleError::CannotTryInto) });
-pickle_try_into!(i64, Pickle::Number(PickleNumber::Int(v)), { v.try_into().map_err(|_| PickleError::CannotTryInto) });
+macro_rules! pickle_try_into_int {
+    ($type:ty) => {
+        pickle_try_into!(
+            $type,
+            Pickle::Number(num),
+            {
+                match(num) {
+                    PickleNumber::Uint(v) => v.try_into().map_err(|_| PickleError::CannotTryInto),
+                    PickleNumber::Int(v) => v.try_into().map_err(|_| PickleError::CannotTryInto),
+                    _ => Err(PickleError::CannotTryInto)
+                }
+            }
+        );
+    };
+}
+pickle_try_into_int!(u8);
+pickle_try_into_int!(u16);
+pickle_try_into_int!(u32);
+pickle_try_into_int!(u64);
+pickle_try_into_int!(i8);
+pickle_try_into_int!(i16);
+pickle_try_into_int!(i32);
+pickle_try_into_int!(i64);
 pickle_try_into!(f32, Pickle::Number(PickleNumber::Float(v)), { Ok(v as f32) }); // Precision loss.
 pickle_try_into!(f64, Pickle::Number(PickleNumber::Float(v)), { v.try_into().map_err(|_| PickleError::CannotTryInto) });
 

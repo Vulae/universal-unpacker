@@ -45,8 +45,10 @@ pub fn indent(str: String) -> String {
 impl RenPyCompiledScriptChunk {
 
     pub fn decompile(&mut self) -> Result<String, Box<dyn Error>> {
-        let pickle = self.pickle()?;
+        Self::decompile_pickle(self.pickle()?)
+    }
 
+    pub fn decompile_pickle(pickle: Pickle) -> Result<String, Box<dyn Error>> {
         let (header, ast): (_, Pickle) = pickle.try_into()?;
         let header: HashMap<_, _> = header.try_into()?;
 

@@ -52,8 +52,6 @@ where
         let mapped = mapper(file.path().to_owned(), &mut data)?;
         let (path, mut data) = if let Some(mapped) = mapped { mapped } else { (file.path().to_owned(), data) };
 
-        println!("File: \"{}\"", path);
-
         // Output path.
         let mut out_path = PathBuf::from(output);
         out_path.push(path);

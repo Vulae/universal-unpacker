@@ -1,8 +1,8 @@
 
-use std::{error::Error, fs::{self, File}, io::Write, path::PathBuf};
+use std::{error::Error, fs::File, io::Cursor, path::PathBuf};
 use clap::Parser;
 
-use crate::extract::renpy::{archive::RenPyArchive, script::RenPyCompiledScript};
+use crate::{extract::renpy::{archive::RenPyArchive, script::RenPyCompiledScript}, util::dir_extract};
 
 
 
@@ -20,77 +20,45 @@ pub struct CliRenPy {
 
 impl CliRenPy {
 
-    fn extract_archive(&self, output: &PathBuf, overwrite_output: bool) -> Result<(), Box<dyn Error>> {
-        let archive_file = File::open(&self.file)?;
+    fn mapper(path: String, data: &mut Vec<u8>) -> Result<Option<(String, Vec<u8>)>, Box<dyn Error>> {
+        println!("File: \"{}\"", path);
+
+        if path.ends_with(".rpyc") {
+            let script = RenPyCompiledScript::load(&mut Cursor::new(data))?;
+            if let Some(mut chunk) = script.chunk(1) {
+                if let Ok(str) = chunk.decompile() {
+                    return Ok(Some((
+                        path.replace(".rpyc", ".rpyc-decomp"),
+                        str.as_bytes().to_vec()
+                    )));
+                } else {
+                    println!("Ren'Py script decompilation error could not gracefully handle.");
+                    // So we output pickle instead with message.
+                    return Ok(Some((
+                        path.replace(".rpyc", ".rypc-pickle"),
+                        format!("CATASTROPHIC ERROR\nFile could not decompile\nPlease create a bug report with this file.\n{:#?}", chunk.pickle()?).as_bytes().to_vec()
+                    )))
+                }
+            }
+        }
+
+        Ok(None)
+    }
+
+    pub fn extract(&self, output: &PathBuf, overwrite_output: bool) -> Result<(), Box<dyn Error>> {
 
         println!("Loading archive");
 
         let archive_file = File::open(&self.file)?;
         let mut archive = RenPyArchive::from_file(archive_file)?;
 
-        println!("Archive loaded with {} files", &archive.files.len());
+        println!("Extracting archive");
 
-        for file in &mut archive.files {
-            println!("Extracting file \"{}\" - {} bytes", &file.path, &file.size);
+        dir_extract(&mut archive, output, overwrite_output, Self::mapper)?;
 
-            let mut output_file_path = PathBuf::from(output);
-            output_file_path.push(&file.path);
-            
-            let mut data = file.read_data()?;
-
-            if let Ok(meta) = fs::metadata(&output_file_path) {
-                if meta.is_file() && !overwrite_output {
-                    continue;
-                }
-            }
-
-            fs::create_dir_all(output_file_path.parent().unwrap())?;
-
-            let mut output_file = File::create(output_file_path)?;
-            output_file.write_all(&mut data)?;
-            output_file.flush()?;
-        }
-
-        println!("Done extracting archive");
+        println!("Done");
 
         Ok(())
-    }
-
-    fn extract_compiled_script(&self, output: &PathBuf, overwrite_output: bool) -> Result<(), Box<dyn Error>> {
-        let mut archive_file = File::open(&self.file)?;
-
-        let script = RenPyCompiledScript::load(&mut archive_file)?;
-
-        match script.chunk(1) {
-            Some(mut chunk) => {
-                let data = chunk.decompile()?;
-                // let data = format!("{:#?}", chunk.pickle()?);
-
-                fs::create_dir_all(output.parent().unwrap())?;
-
-                let mut output_file = File::create(output)?;
-                output_file.write_all(&mut data.as_bytes())?;
-                output_file.flush()?;
-            },
-            _ => { }
-        }
-        
-        Ok(())
-    }
-
-    pub fn extract(&self, output: &PathBuf, overwrite_output: bool) -> Result<(), Box<dyn Error>> {
-        match &self.file.extension() {
-            Some(ext) => match ext.to_str() {
-                Some("rpa") => {
-                    self.extract_archive(output, overwrite_output)
-                },
-                Some("rpyc") => {
-                    self.extract_compiled_script(output, overwrite_output)
-                },
-                _ => panic!("CliRenPy: Invalid file extension."),
-            },
-            _ => panic!("CliRenPy: Invalid file extension."),
-        }
     }
 
 }
