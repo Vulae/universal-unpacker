@@ -10,7 +10,7 @@ A simple command line tool to extract assets from a variety of archival formats.
     * Extract resource data
 * RenPy [.rpa](https://github.com/renpy/renpy/blob/master/renpy/loader.py#L101) file
     * Very basic compiled script decompilation
-* Source engine [.vpk]((https://developer.valvesoftware.com/wiki/VPK_(file_format))) file
+* Source engine [.vpk](https://developer.valvesoftware.com/wiki/VPK_(file_format)) file
 
 A list of to be implemented formats is in the [`TODO.md`](/TODO.md#future-unpackers)
 
