@@ -1,7 +1,7 @@
 
 use std::{error::Error, fs::File, io::{Read, Seek}};
 use bitflags::bitflags;
-use crate::util::read_ext::ReadExt;
+use crate::util::{read_ext::ReadExt, virtual_fs::{VirtualDirectory, VirtualEntry, VirtualFile}};
 
 
 
@@ -22,22 +22,26 @@ bitflags! {
 #[derive(Debug)]
 pub struct GodotPckFile {
     file: File,
-    pub path: String,
-    pub offset: i64,
-    pub size: i64,
-    pub md5: [u8; 16],
-    pub flags: GodotPckFileFlags,
+    path: String,
+    offset: i64,
+    size: i64,
+    md5: [u8; 16],
+    flags: GodotPckFileFlags,
+    encryption_key: Option<[u8; 32]>,
 }
 
-impl GodotPckFile {
+impl VirtualFile for GodotPckFile {
+    fn path(&mut self) -> &str {
+        &self.path
+    }
 
-    pub fn read_data(&mut self, encryption_key: Option<[u8; 32]>) -> Result<Vec<u8>, Box<dyn Error>> {
+    fn read_data(&mut self) -> Result<Vec<u8>, Box<dyn Error>> {
         let mut buf: Vec<u8> = vec![0; self.size as usize];
         self.file.seek(std::io::SeekFrom::Start(self.offset as u64))?;
         self.file.read(&mut buf)?;
 
         if self.flags.contains(GodotPckFileFlags::ENCRYPTED_FILE) {
-            if let Some(_encryption_key) = encryption_key {
+            if let Some(_encryption_key) = self.encryption_key {
                 todo!("GodotPckFile decryption not yet supported.");
             } else {
                 panic!("GodotPckFile tried to decrypt file that is encrypted");
@@ -46,23 +50,25 @@ impl GodotPckFile {
 
         Ok(buf)
     }
-
 }
+
+
 
 #[derive(Debug)]
 pub struct GodotPck {
-    pub file: File,
-    pub version: (i32, i32, i32, i32),
-    pub flags: GodotPckFlags,
-    pub num_files: i32,
-    pub files: Vec<GodotPckFile>,
+    file: File,
+    version: (i32, i32, i32, i32),
+    flags: GodotPckFlags,
+    num_files: i32,
+    files: Vec<GodotPckFile>,
+    encryption_key: Option<[u8; 32]>,
 }
 
 impl GodotPck {
 
     const IDENTIFIER: [u8; 4] = *b"GDPC";
 
-    pub fn from_file(mut file: File) -> Result<Self, Box<dyn Error>> {
+    pub fn from_file(mut file: File, encryption_key: Option<[u8; 32]>) -> Result<Self, Box<dyn Error>> {
         assert!(Self::IDENTIFIER.iter().eq(file.read_primitive::<[u8; 4]>()?.iter()), "Archive identifier does not match.");
 
         let version: (i32, i32, i32, i32) = (
@@ -87,12 +93,26 @@ impl GodotPck {
 
             let flags = GodotPckFileFlags::from_bits_retain(if version.0 >= 2 { file.read_primitive()? } else { 0 });
 
-            files.push(GodotPckFile { file: file.try_clone()?, path, offset: offset + files_offset, size, md5, flags });
+            files.push(GodotPckFile { file: file.try_clone()?, path, offset: offset + files_offset, size, md5, flags, encryption_key });
         }
 
-        Ok(GodotPck { file: file.try_clone()?, version, flags, num_files, files })
+        Ok(GodotPck { file: file.try_clone()?, version, flags, num_files, files, encryption_key })
     }
     
+}
+
+impl VirtualDirectory<GodotPckFile, GodotPck> for GodotPck {
+    fn path(&mut self) -> &str {
+        ""
+    }
+
+    fn read_entries(&mut self) -> Result<Vec<VirtualEntry<GodotPckFile, GodotPck>>, Box<dyn Error>> {
+        let mut entries: Vec<VirtualEntry<GodotPckFile, GodotPck>> = Vec::new();
+        self.files.iter_mut().for_each(|file| {
+            entries.push(VirtualEntry::File(file));
+        });
+        Ok(entries)
+    }
 }
 
 
